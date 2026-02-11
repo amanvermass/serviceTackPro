@@ -5,6 +5,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { Client } from '@/data/mock-client-data';
 import toastConfig from '@/components/CustomToast';
+import TableShimmer from '@/components/TableShimmer';
 
 export default function ClientManagement() {
   const router = useRouter();
@@ -308,12 +309,15 @@ export default function ClientManagement() {
                 </tr>
               </thead>
               <tbody id="clientTableBody">
-                {filteredClients.map((client) => (
-                  <tr 
-                    key={client.id}
-                    onClick={() => handleRowClick(client.id)}
-                    className="cursor-pointer hover:bg-surface-hover transition-smooth client-row" 
-                  >
+                {loading ? (
+                  <TableShimmer columns={6} rows={10} />
+                ) : (
+                  filteredClients.map((client) => (
+                    <tr 
+                      key={client.id}
+                      onClick={() => handleRowClick(client.id)}
+                      className="cursor-pointer hover:bg-surface-hover transition-smooth client-row" 
+                    >
                     <td>
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0
@@ -369,7 +373,8 @@ export default function ClientManagement() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  ))
+                )}
               </tbody>
             </table>
           </div>

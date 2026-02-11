@@ -7,6 +7,7 @@ import Footer from '@/components/Footer';
 import { MOCK_DOMAINS, Domain } from '@/data/mock-domain-data';
 import { Client } from '@/data/mock-client-data';
 import toastConfig from '@/components/CustomToast';
+import TableShimmer from '@/components/TableShimmer';
 
 export default function DomainManagement() {
   const router = useRouter();
@@ -657,12 +658,15 @@ export default function DomainManagement() {
                 </tr>
               </thead>
               <tbody>
-                {filteredDomains.map((domain) => (
-                  <tr 
-                    key={domain.id} 
-                    className="hover:bg-surface-hover transition-smooth group cursor-pointer"
-                    onClick={() => handleRowClick(domain)}
-                  >
+                {loading ? (
+                  <TableShimmer columns={8} rows={10} />
+                ) : (
+                  filteredDomains.map((domain) => (
+                    <tr 
+                      key={domain.id} 
+                      className="hover:bg-surface-hover transition-smooth group cursor-pointer"
+                      onClick={() => handleRowClick(domain)}
+                    >
                     <td className="w-12" onClick={(e) => e.stopPropagation()}>
                       <input 
                         type="checkbox" 
@@ -749,7 +753,8 @@ export default function DomainManagement() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  ))
+                )}
               </tbody>
             </table>
           </div>
