@@ -1,15 +1,20 @@
 
 'use client';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { MOCK_DOMAINS, Domain } from '@/data/mock-domain-data';
+import { Client } from '@/data/mock-client-data';
+import toastConfig from '@/components/CustomToast';
 
 export default function DomainManagement() {
   const router = useRouter();
-  const [domains, setDomains] = useState<Domain[]>(MOCK_DOMAINS);
+  const [domains, setDomains] = useState<Domain[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isAddDomainModalOpen, setIsAddDomainModalOpen] = useState(false);
+  const [editingDomain, setEditingDomain] = useState<Domain | null>(null);
   const [isAdvancedFiltersOpen, setIsAdvancedFiltersOpen] = useState(false);
   const [isAlertVisible, setIsAlertVisible] = useState(true);
   
@@ -19,26 +24,175 @@ export default function DomainManagement() {
   const [vendorFilter, setVendorFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 10;
+
   // Selection State
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
 
   // Sorting State
   const [sortConfig, setSortConfig] = useState<{ key: keyof Domain; direction: 'asc' | 'desc' } | null>(null);
 
+  const fetchDomains = useCallback(async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      const queryParams = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: itemsPerPage.toString(),
+      });
+
+      if (searchQuery) queryParams.append('search', searchQuery);
+      if (statusFilter !== 'all') queryParams.append('status', statusFilter);
+      if (vendorFilter !== 'all') queryParams.append('registrar', vendorFilter);
+      
+      if (sortConfig) {
+        // Map frontend sort keys to backend keys if necessary
+        let sortBy = sortConfig.key;
+        if (sortBy === 'name') sortBy = 'domainName' as any;
+        if (sortBy === 'vendor') sortBy = 'registrar' as any;
+        // Backend expects specific fields, default to expiryDate if not supported
+        // But for now let's pass it and hope backend handles or ignores
+        queryParams.append('sortBy', sortBy as string);
+        queryParams.append('order', sortConfig.direction);
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/domains?${queryParams.toString()}`, {
+        headers: {
+          'x-auth-token': token,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.pagination) {
+          setTotalPages(data.pagination.totalPages);
+          setCurrentPage(data.pagination.currentPage);
+        }
+        
+        // Map backend data to Domain interface
+        const mappedDomains: Domain[] = data.data.map((item: any) => {
+          const expiryDate = item.expiryDate ? new Date(item.expiryDate) : new Date();
+          const now = new Date();
+          const diffTime = expiryDate.getTime() - now.getTime();
+          const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          
+          let expiryStatus = 'Active';
+          if (daysRemaining < 0) expiryStatus = 'Expired';
+          else if (daysRemaining <= 30) expiryStatus = 'Expiring Soon';
+
+          const clientObj = item.client && typeof item.client === 'object' ? item.client : null;
+          const clientName = clientObj ? (clientObj.company || clientObj.name || 'N/A') : 'N/A';
+          const clientId = clientObj ? clientObj._id : (typeof item.client === 'string' ? item.client : '');
+          const clientContact = clientObj ? (clientObj.email || 'N/A') : 'N/A';
+
+          return {
+            id: item._id,
+            name: item.domainName,
+            client: clientName,
+            clientId: clientId,
+            contact: clientContact,
+            expiryDate: expiryDate.toISOString().split('T')[0],
+            expiryStatus,
+            daysRemaining,
+            vendor: item.registrar,
+            cost: item.cost || 0,
+            status: item.status || 'active',
+            autoRenew: item.autoRenew,
+            registrarInfo: {
+              name: item.registrar,
+              url: '',
+              supportEmail: '',
+              accountUser: ''
+            },
+            nameservers: [],
+            dnsRecords: [],
+            authCode: '',
+            sslStatus: {
+              active: false,
+              provider: '',
+              expiryDate: '',
+              autoRenew: false
+            },
+            activityLog: []
+          };
+        });
+
+        setDomains(mappedDomains);
+      } else {
+        console.error('Failed to fetch domains');
+        // Fallback to mock data if API fails? Or just empty.
+        // setDomains(MOCK_DOMAINS);
+      }
+    } catch (error) {
+      console.error('Error fetching domains:', error);
+      toastConfig.error('Failed to load domains');
+    } finally {
+      setLoading(false);
+    }
+  }, [currentPage, searchQuery, statusFilter, vendorFilter, sortConfig]);
+
+  useEffect(() => {
+    fetchDomains();
+  }, [fetchDomains]);
+
+  // Fetch Clients for Dropdown
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/clients?limit=100`, {
+          headers: {
+            'x-auth-token': token,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          // Map backend data to Client interface
+          const mappedClients: Client[] = data.data.map((item: any) => ({
+            id: item._id,
+            companyName: item.company || item.name,
+            website: item.website || '',
+            logo: '',
+            status: item.status || 'active',
+            industry: '',
+            since: '',
+            notes: '',
+            primaryContact: { name: '', email: '', phone: '', role: '', avatar: '' },
+            address: { street: '', city: '', state: '', zip: '', country: '' },
+            services: { domains: 0, hosting: 0, maintenance: false },
+            billing: { totalSpent: 0, nextInvoiceDate: '', paymentMethod: '' }
+          }));
+          setClients(mappedClients);
+        }
+      } catch (error) {
+        console.error('Error fetching clients:', error);
+      }
+    };
+
+    fetchClients();
+  }, []);
+
   // Derived State: Filtered & Sorted Domains
+  // Since we are doing server-side filtering, we might not need this complex logic anymore
+  // But for client-side only filters (like clientFilter if not supported by backend), we can keep it.
   const filteredDomains = useMemo(() => {
     let result = [...domains];
 
-    // Filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(d => 
-        d.name.toLowerCase().includes(query) || 
-        d.client.toLowerCase().includes(query)
-      );
-    }
+    // Client filter is NOT supported by backend yet, so filter here
     if (clientFilter !== 'all') {
-      // Simple mapping for mock data
       const clientMap: Record<string, string> = {
         'techcorp': 'TechCorp Solutions',
         'digital': 'Digital Innovations Inc',
@@ -49,35 +203,9 @@ export default function DomainManagement() {
         result = result.filter(d => d.client === clientMap[clientFilter]);
       }
     }
-    if (vendorFilter !== 'all') {
-      result = result.filter(d => d.vendor.toLowerCase().includes(vendorFilter.toLowerCase()));
-    }
-    if (statusFilter !== 'all') {
-      result = result.filter(d => d.status === statusFilter);
-    }
-
-    // Sort
-    if (sortConfig) {
-      const { key, direction } = sortConfig;
-      result.sort((a, b) => {
-        const valA = a[key];
-        const valB = b[key];
-        if (valA === valB) return 0;
-        if (valA === undefined) return 1;
-        if (valB === undefined) return -1;
-
-        if (valA < valB) {
-          return direction === 'asc' ? -1 : 1;
-        }
-        if (valA > valB) {
-          return direction === 'asc' ? 1 : -1;
-        }
-        return 0;
-      });
-    }
-
+    
     return result;
-  }, [domains, searchQuery, clientFilter, vendorFilter, statusFilter, sortConfig]);
+  }, [domains, clientFilter]);
 
   // Handlers
   const handleSort = (key: keyof Domain) => {
@@ -133,11 +261,97 @@ export default function DomainManagement() {
     alert('Exporting domain data...');
   };
 
-  const handleAddDomain = (e: React.FormEvent) => {
+  const handleAddClick = () => {
+    setEditingDomain(null);
+    setIsAddDomainModalOpen(true);
+  };
+
+  const handleEditClick = (domain: Domain, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingDomain(domain);
+    setIsAddDomainModalOpen(true);
+  };
+
+  const handleDeleteClick = async (domainId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to delete this domain?')) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/domains/${domainId}`, {
+        method: 'DELETE',
+        headers: {
+          'x-auth-token': token
+        }
+      });
+
+      if (response.ok) {
+        toastConfig.success('Domain deleted successfully');
+        fetchDomains();
+      } else {
+        toastConfig.error('Failed to delete domain');
+      }
+    } catch (error) {
+      console.error('Error deleting domain:', error);
+      toastConfig.error('Error deleting domain');
+    }
+  };
+
+  const handleSaveDomain = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, this would submit to API
-    alert('Domain added successfully! (Mock)');
-    setIsAddDomainModalOpen(false);
+    const form = e.target as HTMLFormElement;
+    const domainName = (form.elements.namedItem('domainName') as HTMLInputElement).value;
+    const client = (form.elements.namedItem('clientSelect') as HTMLSelectElement).value; // Not used in backend yet
+    const registrar = (form.elements.namedItem('vendorSelect') as HTMLSelectElement).value;
+    const expiryDate = (form.elements.namedItem('expiryDate') as HTMLInputElement).value;
+    const cost = (form.elements.namedItem('cost') as HTMLInputElement).value;
+    const autoRenew = (form.elements.namedItem('autoRenew') as HTMLInputElement).checked;
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toastConfig.error('You must be logged in to manage domains');
+        return;
+      }
+
+      const url = editingDomain 
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/domains/${editingDomain.id}`
+        : `${process.env.NEXT_PUBLIC_API_URL}/api/domains`;
+      
+      const method = editingDomain ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token
+        },
+        body: JSON.stringify({
+          domainName,
+          registrar,
+          expiryDate,
+          cost: parseFloat(cost) || 0,
+          autoRenew,
+          status: 'active', // Default status
+          registrationDate: editingDomain ? undefined : new Date().toISOString(), // Only send on create
+          clientId: client
+        })
+      });
+
+      if (response.ok) {
+        toastConfig.success(`Domain ${editingDomain ? 'updated' : 'added'} successfully!`);
+        setIsAddDomainModalOpen(false);
+        fetchDomains(); // Refresh list
+      } else {
+        const errorData = await response.json();
+        toastConfig.error(errorData.message || `Failed to ${editingDomain ? 'update' : 'add'} domain`);
+      }
+    } catch (error) {
+      console.error(`Error ${editingDomain ? 'updating' : 'adding'} domain:`, error);
+      toastConfig.error(`An error occurred while ${editingDomain ? 'updating' : 'adding'} the domain`);
+    }
   };
 
   const getStatusBadgeClass = (status: string) => {
@@ -176,7 +390,7 @@ export default function DomainManagement() {
               <button 
                 id="addDomainBtn" 
                 className="btn btn-primary flex items-center gap-2"
-                onClick={() => setIsAddDomainModalOpen(true)}
+                onClick={handleAddClick}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -513,15 +727,23 @@ export default function DomainManagement() {
                       </div>
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-1 text-text-tertiary hover:text-primary transition-colors" title="Edit">
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                        <button 
+                          className="p-2 rounded-lg hover:bg-surface-hover transition-smooth" 
+                          aria-label="Edit domain"
+                          onClick={(e) => handleEditClick(domain, e)}
+                        >
+                          <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
-                        <button className="p-1 text-text-tertiary hover:text-primary transition-colors" title="More Options">
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                        <button 
+                          className="p-2 rounded-lg hover:bg-error-50 transition-smooth" 
+                          aria-label="Delete domain"
+                          onClick={(e) => handleDeleteClick(domain.id, e)}
+                        >
+                          <svg className="w-5 h-5 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
                         </button>
                       </div>
@@ -538,33 +760,74 @@ export default function DomainManagement() {
             </div>
           )}
 
-          {/* Pagination (Static Mock) */}
-          <div className="px-6 py-4 border-t border-border flex items-center justify-between">
+          {/* Pagination */}
+          <div className="px-6 py-4 border-t border-border flex flex-col sm:flex-row items-center justify-center gap-4 bg-surface-50">
             <div className="text-sm text-text-secondary">
-              Showing 1 to {filteredDomains.length} of {filteredDomains.length} entries
+               Showing Page <span className="font-medium text-text-primary">{currentPage}</span> of <span className="font-medium text-text-primary">{totalPages}</span>
             </div>
-            <div className="flex gap-1">
-              <button className="w-8 h-8 flex items-center justify-center rounded border border-border text-text-secondary hover:bg-surface-hover disabled:opacity-50" disabled>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <button className="w-8 h-8 flex items-center justify-center rounded bg-primary text-white font-medium">1</button>
-              <button className="w-8 h-8 flex items-center justify-center rounded border border-border text-text-secondary hover:bg-surface-hover">2</button>
-              <button className="w-8 h-8 flex items-center justify-center rounded border border-border text-text-secondary hover:bg-surface-hover">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
+            <div className="flex items-center gap-2">
+               <button 
+                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                 disabled={currentPage === 1}
+                 className="btn btn-outline btn-sm h-8 px-3"
+               >
+                 Previous
+               </button>
+               
+               <div className="flex items-center gap-1">
+                 {(() => {
+                   const pages = [];
+                   if (totalPages <= 3) {
+                      for (let i = 1; i <= totalPages; i++) pages.push(i);
+                   } else {
+                      let start = Math.max(1, currentPage - 1);
+                      let end = Math.min(totalPages, start + 2);
+                      
+                      if (end === totalPages) {
+                          start = Math.max(1, end - 2);
+                      }
+
+                      if (start > 1) pages.push('...');
+                      for (let i = start; i <= end; i++) pages.push(i);
+                      if (end < totalPages) pages.push('...');
+                   }
+                   
+                   return pages.map((page, index) => (
+                     <button
+                       key={index}
+                       onClick={() => typeof page === 'number' ? setCurrentPage(page) : null}
+                       disabled={typeof page !== 'number'}
+                       className={`h-8 min-w-[32px] px-2 rounded-lg text-sm font-medium transition-colors
+                         ${page === currentPage 
+                           ? 'bg-primary text-white shadow-sm' 
+                           : typeof page === 'number' 
+                             ? 'hover:bg-surface-hover text-text-secondary hover:text-text-primary' 
+                             : 'text-text-tertiary cursor-default'}`}
+                     >
+                       {page}
+                     </button>
+                   ));
+                 })()}
+               </div>
+
+               <button 
+                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                 disabled={currentPage === totalPages}
+                 className="btn btn-outline btn-sm h-8 px-3"
+               >
+                 Next
+               </button>
             </div>
           </div>
         </div>
-        {/* Add Domain Modal */}
+        {/* Add/Edit Domain Modal */}
         {isAddDomainModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-surface w-full max-w-lg rounded-2xl shadow-2xl border border-border flex flex-col max-h-[90vh]">
               <div className="flex items-center justify-between p-6 border-b border-border">
-                <h3 className="text-xl font-heading font-bold text-text-primary">Add New Domain</h3>
+                <h3 className="text-xl font-heading font-bold text-text-primary">
+                  {editingDomain ? 'Edit Domain' : 'Add New Domain'}
+                </h3>
                 <button 
                   onClick={() => setIsAddDomainModalOpen(false)}
                   className="text-text-tertiary hover:text-text-primary transition-colors"
@@ -576,27 +839,43 @@ export default function DomainManagement() {
               </div>
               
               <div className="p-6 overflow-y-auto">
-                <form id="addDomainForm" className="space-y-4" onSubmit={handleAddDomain}>
+                <form id="addDomainForm" className="space-y-4" onSubmit={handleSaveDomain}>
                   <div>
                     <label htmlFor="domainName" className="input-label">Domain Name</label>
-                    <input type="text" id="domainName" className="input" placeholder="e.g. example.com" required />
+                    <input 
+                      type="text" 
+                      id="domainName" 
+                      className="input" 
+                      placeholder="e.g. example.com" 
+                      required 
+                      defaultValue={editingDomain?.name || ''}
+                    />
                   </div>
                   
                   <div>
                     <label htmlFor="clientSelect" className="input-label">Client</label>
-                    <select id="clientSelect" className="input">
+                    <select 
+                      id="clientSelect" 
+                      className="input"
+                      defaultValue={editingDomain?.clientId || ''}
+                    >
                       <option value="">Select Client...</option>
-                      <option value="techcorp">TechCorp Solutions</option>
-                      <option value="digital">Digital Innovations Inc</option>
-                      <option value="greenstart">GreenStart Ventures</option>
-                      <option value="bluesky">BlueSky Consulting</option>
+                      {clients.map((client) => (
+                        <option key={client.id} value={client.id}>
+                          {client.companyName}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="vendorSelect" className="input-label">Registrar</label>
-                      <select id="vendorSelect" className="input">
+                      <select 
+                        id="vendorSelect" 
+                        className="input"
+                        defaultValue={editingDomain?.vendor || 'godaddy'}
+                      >
                         <option value="godaddy">GoDaddy</option>
                         <option value="namecheap">Namecheap</option>
                         <option value="cloudflare">Cloudflare</option>
@@ -605,18 +884,38 @@ export default function DomainManagement() {
                     </div>
                     <div>
                       <label htmlFor="expiryDate" className="input-label">Expiry Date</label>
-                      <input type="date" id="expiryDate" className="input" required />
+                      <input 
+                        type="date" 
+                        id="expiryDate" 
+                        className="input" 
+                        required 
+                        defaultValue={editingDomain?.expiryDate || ''}
+                      />
                     </div>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="cost" className="input-label">Annual Cost ($)</label>
-                      <input type="number" id="cost" className="input" placeholder="0.00" min="0" step="0.01" />
+                      <input 
+                        type="number" 
+                        id="cost" 
+                        className="input" 
+                        placeholder="0.00" 
+                        min="0" 
+                        step="0.01" 
+                        defaultValue={editingDomain?.cost || ''}
+                      />
                     </div>
                     <div className="flex items-center pt-8">
                       <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4 rounded border-border text-primary focus:ring-primary" />
+                        <input 
+                          type="checkbox" 
+                          id="autoRenew"
+                          name="autoRenew"
+                          className="w-4 h-4 rounded border-border text-primary focus:ring-primary" 
+                          defaultChecked={editingDomain?.autoRenew || false}
+                        />
                         <span className="text-text-primary">Auto-renew enabled</span>
                       </label>
                     </div>
@@ -637,7 +936,7 @@ export default function DomainManagement() {
                   form="addDomainForm"
                   className="btn btn-primary"
                 >
-                  Add Domain
+                  {editingDomain ? 'Save Changes' : 'Add Domain'}
                 </button>
               </div>
             </div>
