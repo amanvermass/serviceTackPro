@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# Node / Next.js
+node_modules/
+.next/
+dist/
+build/
+
+# Env files
+.env
+.env.local
+
+# TypeScript
+tsconfig.tsbuildinfo
+
+# Editor
+.vscode/
