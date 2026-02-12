@@ -4,7 +4,8 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { MOCK_PROJECTS, MOCK_TEAM, Project, TeamMember } from '@/data/mock-maintenance-data';
+import { MOCK_TEAM, Project, TeamMember } from '@/data/mock-maintenance-data';
+import { toast } from 'react-hot-toast';
 
 // Helper Component: MultiSelect
 const MultiSelect = ({ 
@@ -105,6 +106,9 @@ export default function MaintenanceModule() {
   // State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isWorkloadPanelOpen, setIsWorkloadPanelOpen] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
   
   const [filters, setFilters] = useState({
     search: '',
@@ -118,21 +122,69 @@ export default function MaintenanceModule() {
     direction: 'asc'
   });
 
+  // Fetch Projects
+  const fetchProjects = async () => {
+    setIsLoading(true);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`${apiUrl}/api/maintenance`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Map API data to Project interface
+        const mappedData: Project[] = data.map((item: any) => ({
+          id: item._id,
+          client: item.client || item.clientName || 'Unknown Client',
+          clientId: item.clientId,
+          name: item.name || item.projectName,
+          type: item.type || 'website',
+          startDate: item.startDate,
+          endDate: item.endDate,
+          monthlyValue: item.monthlyValue || 0,
+          freeChanges: item.freeChanges || { used: 0, total: 5 },
+          paidChanges: item.paidChanges || 0,
+          team: item.team || [],
+          status: item.status || 'active',
+          notes: item.notes || '',
+          recentChanges: item.recentChanges || []
+        }));
+        setProjects(mappedData);
+      } else {
+        console.error('Failed to fetch projects');
+        // Fallback to empty or mock if needed, but better to show empty state
+        // setProjects(MOCK_PROJECTS); 
+      }
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+      // setProjects(MOCK_PROJECTS);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
   // Derived Data
   const filteredProjects = useMemo(() => {
-    return MOCK_PROJECTS.filter(project => {
+    return projects.filter(project => {
       const matchesSearch = 
         project.client.toLowerCase().includes(filters.search.toLowerCase()) ||
         project.name.toLowerCase().includes(filters.search.toLowerCase()) ||
         project.team.some(memberId => MOCK_TEAM.find(m => m.id === memberId)?.name.toLowerCase().includes(filters.search.toLowerCase()));
 
-      const matchesClient = filters.client === 'all' || project.clientId === filters.client;
+      const matchesClient = filters.client === 'all' || project.clientId === filters.client || project.client === filters.client; // Relaxed check
       const matchesTeam = filters.team.length === 0 || project.team.some(memberId => filters.team.includes(memberId));
       const matchesStatus = filters.status.length === 0 || filters.status.includes(project.status);
 
       return matchesSearch && matchesClient && matchesTeam && matchesStatus;
     });
-  }, [filters]);
+  }, [filters, projects]);
 
   const sortedProjects = useMemo(() => {
     return [...filteredProjects].sort((a, b) => {
@@ -143,8 +195,8 @@ export default function MaintenanceModule() {
         aValue = new Date(a.startDate).getTime();
         bValue = new Date(b.startDate).getTime();
       } else if (sortConfig.key === 'changes') {
-        aValue = a.freeChanges.used + a.paidChanges;
-        bValue = b.freeChanges.used + b.paidChanges;
+        aValue = (a.freeChanges?.used || 0) + (a.paidChanges || 0);
+        bValue = (b.freeChanges?.used || 0) + (b.paidChanges || 0);
       }
 
       if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -155,12 +207,12 @@ export default function MaintenanceModule() {
 
   const stats = useMemo(() => {
     return {
-      active: MOCK_PROJECTS.filter(p => p.status === 'active').length,
-      pending: MOCK_PROJECTS.filter(p => p.status === 'pending').length,
-      completedChanges: MOCK_PROJECTS.reduce((acc, p) => acc + p.paidChanges + (p.recentChanges?.length || 0), 0),
-      teamMembers: MOCK_TEAM.length
+      active: projects.filter(p => p.status === 'active').length,
+      pending: projects.filter(p => p.status === 'pending').length,
+      completedChanges: projects.reduce((acc, p) => acc + (p.paidChanges || 0) + (p.recentChanges?.length || 0), 0),
+      teamMembers: MOCK_TEAM.length // Still using mock team count
     };
-  }, []);
+  }, [projects]);
 
   // Handlers
   const handleSort = (key: keyof Project | 'amc' | 'changes') => {
@@ -182,11 +234,82 @@ export default function MaintenanceModule() {
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   };
 
   const navigateToDetails = (projectId: string) => {
     router.push(`/maintenance-module/${projectId}`);
+  };
+
+  const handleEditClick = (project: Project) => {
+    setEditingProject(project);
+    setIsAddModalOpen(true);
+  };
+
+  const handleSaveProject = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    
+    // Collect team members
+    const teamMembers: string[] = [];
+    MOCK_TEAM.forEach(member => {
+        if ((formData.get(`team_${member.id}`) as string) === 'on') {
+            teamMembers.push(member.id);
+        }
+    });
+
+    const data = {
+      client: formData.get('clientName'),
+      name: formData.get('projectName'),
+      startDate: formData.get('startDate'),
+      endDate: formData.get('endDate'),
+      monthlyValue: Number(formData.get('monthlyValue')),
+      freeChanges: {
+        total: Number(formData.get('freeChangesTotal')),
+        used: Number(formData.get('freeChangesUsed') || 0)
+      },
+      status: formData.get('status'),
+      team: teamMembers
+    };
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const token = localStorage.getItem('token');
+      
+      let response;
+      if (editingProject) {
+        response = await fetch(`${apiUrl}/api/maintenance/${editingProject.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(data)
+        });
+      } else {
+        response = await fetch(`${apiUrl}/api/maintenance`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(data)
+        });
+      }
+
+      if (response.ok) {
+        toast.success(editingProject ? 'Project updated successfully' : 'Project added successfully');
+        setIsAddModalOpen(false);
+        setEditingProject(null);
+        fetchProjects();
+      } else {
+        toast.error('Failed to save project');
+      }
+    } catch (error) {
+      console.error('Error saving project:', error);
+      toast.error('Error connecting to server');
+    }
   };
 
   return (
@@ -213,7 +336,10 @@ export default function MaintenanceModule() {
                 Team Workload
               </button>
               <button 
-                onClick={() => setIsAddModalOpen(true)}
+                onClick={() => {
+                  setEditingProject(null);
+                  setIsAddModalOpen(true);
+                }}
                 className="btn btn-primary flex items-center gap-2"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -372,165 +498,178 @@ export default function MaintenanceModule() {
 
         {/* Projects Table */}
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th 
-                    className="cursor-pointer hover:bg-secondary-100 transition-smooth"
-                    onClick={() => handleSort('client')}
-                  >
-                    <div className="flex items-center gap-2">
-                      Client & Project
-                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.key === 'client' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
-                      </svg>
-                    </div>
-                  </th>
-                  <th 
-                    className="cursor-pointer hover:bg-secondary-100 transition-smooth"
-                    onClick={() => handleSort('amc')}
-                  >
-                    <div className="flex items-center gap-2">
-                      AMC Period
-                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.key === 'amc' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
-                      </svg>
-                    </div>
-                  </th>
-                  <th 
-                    className="cursor-pointer hover:bg-secondary-100 transition-smooth"
-                    onClick={() => handleSort('changes')}
-                  >
-                    <div className="flex items-center gap-2">
-                      Change Counter
-                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.key === 'changes' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
-                      </svg>
-                    </div>
-                  </th>
-                  <th>Assigned Team</th>
-                  <th>Status</th>
-                  <th className="flex items-center justify-end">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedProjects.map(project => (
-                  <tr 
-                    key={project.id}
-                    className="cursor-pointer hover:bg-surface-hover transition-smooth"
-                    onClick={(e) => {
-                      if (!(e.target as HTMLElement).closest('button')) {
-                        navigateToDetails(project.id);
-                      }
-                    }}
-                  >
-                    <td>
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                          project.clientId === 'techcorp' ? 'bg-primary-100 text-primary-700' :
-                          project.clientId === 'digital' ? 'bg-accent-100 text-accent-700' :
-                          project.clientId === 'greenstart' ? 'bg-success-100 text-success-700' :
-                          'bg-secondary-100 text-secondary-700'
-                        }`}>
-                          <span className="font-semibold text-sm">
-                            {project.client.split(' ').map(n => n[0]).join('').substring(0, 2)}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="font-medium text-text-primary">{project.client}</p>
-                          <p className="text-xs text-text-secondary">{project.name}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <div>
-                        <p className="font-medium text-text-primary">{formatDate(project.startDate)} - {formatDate(project.endDate)}</p>
-                        <p className="text-xs text-text-secondary">{getRemainingMonths(project.endDate)} months remaining</p>
-                      </div>
-                    </td>
-                    <td>
+          {isLoading ? (
+            <div className="p-8 text-center text-text-secondary">Loading projects...</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th 
+                      className="cursor-pointer hover:bg-secondary-100 transition-smooth"
+                      onClick={() => handleSort('client')}
+                    >
                       <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1">
-                          <span className={`badge ${project.freeChanges.used >= project.freeChanges.total ? 'badge-error' : 'badge-success'}`}>
-                            Free: {project.freeChanges.used}/{project.freeChanges.total}
-                          </span>
-                          <span className={`badge ${project.paidChanges > 0 ? 'badge-warning' : 'badge-primary'}`}>
-                            Paid: {project.paidChanges}
-                          </span>
-                        </div>
+                        Client & Project
+                        <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.key === 'client' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                        </svg>
                       </div>
-                    </td>
-                    <td>
+                    </th>
+                    <th 
+                      className="cursor-pointer hover:bg-secondary-100 transition-smooth"
+                      onClick={() => handleSort('amc')}
+                    >
                       <div className="flex items-center gap-2">
-                        {getTeamMembers(project.team).slice(0, 2).map((member, i) => (
-                          <img 
-                            key={member.id}
-                            src={member.avatar}
-                            alt={member.name}
-                            className={`w-8 h-8 rounded-full object-cover ${i > 0 ? '-ml-2' : ''}`}
-                            onError={(e) => {e.currentTarget.src='https://images.unsplash.com/photo-1584824486509-112e4181ff6b?q=80&w=2940&auto=format&fit=crop';}}
-                          />
-                        ))}
-                        {project.team.length > 2 && (
-                          <span className="text-xs text-text-secondary ml-1">+{project.team.length - 2}</span>
-                        )}
+                        AMC Period
+                        <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.key === 'amc' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                        </svg>
                       </div>
-                    </td>
-                    <td>
-                      <span className={`badge ${
-                        project.status === 'active' ? 'badge-success' :
-                        project.status === 'pending' ? 'badge-warning' :
-                        project.status === 'on-hold' ? 'badge-primary' :
-                        'badge-secondary'
-                      }`}>
-                        {project.status.charAt(0).toUpperCase() + project.status.slice(1).replace('-', ' ')}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="flex items-center justify-end gap-2">
-                        <button 
-                          className="p-2 rounded-lg hover:bg-surface-hover transition-smooth" 
-                          aria-label="View project details"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigateToDetails(project.id);
-                          }}
-                        >
-                          <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                          </svg>
-                        </button>
-                        <button className="p-2 rounded-lg hover:bg-surface-hover transition-smooth" aria-label="Edit project">
-                          <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                          </svg>
-                        </button>
-                        <button className="p-2 rounded-lg hover:bg-primary-50 transition-smooth" aria-label="Add change request">
-                          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/>
-                          </svg>
-                        </button>
+                    </th>
+                    <th 
+                      className="cursor-pointer hover:bg-secondary-100 transition-smooth"
+                      onClick={() => handleSort('changes')}
+                    >
+                      <div className="flex items-center gap-2">
+                        Change Counter
+                        <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.key === 'changes' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                        </svg>
                       </div>
-                    </td>
+                    </th>
+                    <th>Assigned Team</th>
+                    <th>Status</th>
+                    <th className="flex items-center justify-end">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {sortedProjects.map(project => (
+                    <tr 
+                      key={project.id}
+                      className="cursor-pointer hover:bg-surface-hover transition-smooth"
+                      onClick={(e) => {
+                        if (!(e.target as HTMLElement).closest('button')) {
+                          navigateToDetails(project.id);
+                        }
+                      }}
+                    >
+                      <td>
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                            project.clientId === 'techcorp' ? 'bg-primary-100 text-primary-700' :
+                            project.clientId === 'digital' ? 'bg-accent-100 text-accent-700' :
+                            project.clientId === 'greenstart' ? 'bg-success-100 text-success-700' :
+                            'bg-secondary-100 text-secondary-700'
+                          }`}>
+                            <span className="font-semibold text-sm">
+                              {project.client.split(' ').map(n => n[0]).join('').substring(0, 2)}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="font-medium text-text-primary">{project.client}</p>
+                            <p className="text-xs text-text-secondary">{project.name}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <div>
+                          <p className="font-medium text-text-primary">{formatDate(project.startDate)} - {formatDate(project.endDate)}</p>
+                          <p className="text-xs text-text-secondary">{getRemainingMonths(project.endDate)} months remaining</p>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1">
+                            <span className={`badge ${(project.freeChanges?.used || 0) >= (project.freeChanges?.total || 0) ? 'badge-error' : 'badge-success'}`}>
+                              Free: {project.freeChanges?.used || 0}/{project.freeChanges?.total || 0}
+                            </span>
+                            <span className={`badge ${(project.paidChanges || 0) > 0 ? 'badge-warning' : 'badge-primary'}`}>
+                              Paid: {project.paidChanges || 0}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="flex items-center gap-2">
+                          {getTeamMembers(project.team).slice(0, 2).map((member, i) => (
+                            <img 
+                              key={member.id}
+                              src={member.avatar}
+                              alt={member.name}
+                              className={`w-8 h-8 rounded-full object-cover ${i > 0 ? '-ml-2' : ''}`}
+                              onError={(e) => {e.currentTarget.src='https://images.unsplash.com/photo-1584824486509-112e4181ff6b?q=80&w=2940&auto=format&fit=crop';}}
+                            />
+                          ))}
+                          {project.team.length > 2 && (
+                            <span className="text-xs text-text-secondary ml-1">+{project.team.length - 2}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`badge ${
+                          project.status === 'active' ? 'badge-success' :
+                          project.status === 'pending' ? 'badge-warning' :
+                          project.status === 'on-hold' ? 'badge-primary' :
+                          'badge-secondary'
+                        }`}>
+                          {project.status.charAt(0).toUpperCase() + project.status.slice(1).replace('-', ' ')}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="flex items-center justify-end gap-2">
+                          <button 
+                            className="p-2 rounded-lg hover:bg-surface-hover transition-smooth" 
+                            aria-label="View project details"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigateToDetails(project.id);
+                            }}
+                          >
+                            <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                            </svg>
+                          </button>
+                          <button 
+                            className="p-2 rounded-lg hover:bg-surface-hover transition-smooth" 
+                            aria-label="Edit project"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditClick(project);
+                            }}
+                          >
+                            <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                            </svg>
+                          </button>
+                          <button className="p-2 rounded-lg hover:bg-primary-50 transition-smooth" aria-label="Add change request">
+                            <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/>
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </main>
       
       <Footer />
 
-      {/* Add Project Modal */}
+      {/* Add/Edit Project Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-surface rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-border sticky top-0 bg-surface z-10">
               <div className="flex items-center justify-between">
-                <h3 className="text-xl font-heading font-bold text-text-primary">Add New Maintenance Project</h3>
+                <h3 className="text-xl font-heading font-bold text-text-primary">
+                  {editingProject ? 'Edit Maintenance Project' : 'Add New Maintenance Project'}
+                </h3>
                 <button 
                   onClick={() => setIsAddModalOpen(false)}
                   className="p-2 rounded-lg hover:bg-surface-hover transition-smooth"
@@ -543,46 +682,117 @@ export default function MaintenanceModule() {
               </div>
             </div>
             
-            <form className="p-6 space-y-6" onSubmit={(e) => {
-              e.preventDefault();
-              alert('Maintenance project added successfully (Mock)');
-              setIsAddModalOpen(false);
-            }}>
+            <form className="p-6 space-y-6" onSubmit={handleSaveProject}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="clientName" className="input-label">Client Name</label>
-                  <input type="text" id="clientName" className="input" placeholder="e.g. TechCorp Solutions" required />
+                  <input 
+                    type="text" 
+                    id="clientName" 
+                    name="clientName"
+                    className="input" 
+                    placeholder="e.g. TechCorp Solutions" 
+                    defaultValue={editingProject?.client || ''}
+                    required 
+                  />
                 </div>
                 <div>
                   <label htmlFor="projectName" className="input-label">Project Name</label>
-                  <input type="text" id="projectName" className="input" placeholder="e.g. Corporate Website AMC" required />
+                  <input 
+                    type="text" 
+                    id="projectName" 
+                    name="projectName"
+                    className="input" 
+                    placeholder="e.g. Corporate Website AMC" 
+                    defaultValue={editingProject?.name || ''}
+                    required 
+                  />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="startDate" className="input-label">AMC Start Date</label>
-                  <input type="date" id="startDate" className="input" required />
+                  <input 
+                    type="date" 
+                    id="startDate" 
+                    name="startDate"
+                    className="input" 
+                    defaultValue={editingProject?.startDate ? new Date(editingProject.startDate).toISOString().split('T')[0] : ''}
+                    required 
+                  />
                 </div>
                 <div>
                   <label htmlFor="endDate" className="input-label">AMC End Date</label>
-                  <input type="date" id="endDate" className="input" required />
+                  <input 
+                    type="date" 
+                    id="endDate" 
+                    name="endDate"
+                    className="input" 
+                    defaultValue={editingProject?.endDate ? new Date(editingProject.endDate).toISOString().split('T')[0] : ''}
+                    required 
+                  />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="freeChanges" className="input-label">Free Changes Limit (Monthly)</label>
-                  <input type="number" id="freeChanges" className="input" placeholder="e.g. 5" min="0" required />
+                  <label htmlFor="monthlyValue" className="input-label">Monthly Value</label>
+                  <input 
+                    type="number" 
+                    id="monthlyValue" 
+                    name="monthlyValue"
+                    className="input" 
+                    placeholder="e.g. 2500" 
+                    min="0" 
+                    defaultValue={editingProject?.monthlyValue || ''}
+                    required 
+                  />
                 </div>
                 <div>
-                  <label htmlFor="status" className="input-label">Initial Status</label>
-                  <select id="status" className="input" required>
+                  <label htmlFor="status" className="input-label">Status</label>
+                  <select 
+                    id="status" 
+                    name="status"
+                    className="input" 
+                    defaultValue={editingProject?.status || 'active'}
+                    required
+                  >
                     <option value="active">Active</option>
                     <option value="pending">Pending</option>
                     <option value="on-hold">On Hold</option>
+                    <option value="completed">Completed</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="freeChangesTotal" className="input-label">Free Changes Limit (Monthly)</label>
+                  <input 
+                    type="number" 
+                    id="freeChangesTotal" 
+                    name="freeChangesTotal"
+                    className="input" 
+                    placeholder="e.g. 5" 
+                    min="0" 
+                    defaultValue={editingProject?.freeChanges?.total || 5}
+                    required 
+                  />
+                </div>
+                {editingProject && (
+                  <div>
+                    <label htmlFor="freeChangesUsed" className="input-label">Used Free Changes</label>
+                    <input 
+                      type="number" 
+                      id="freeChangesUsed" 
+                      name="freeChangesUsed"
+                      className="input" 
+                      min="0" 
+                      defaultValue={editingProject?.freeChanges?.used || 0}
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
@@ -590,80 +800,34 @@ export default function MaintenanceModule() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
                   {MOCK_TEAM.map(member => (
                     <label key={member.id} className="flex items-center gap-2 p-2 border border-border rounded-lg hover:bg-surface-hover cursor-pointer">
-                      <input type="checkbox" className="rounded border-border text-primary focus:ring-primary" />
+                      <input 
+                        type="checkbox" 
+                        name={`team_${member.id}`}
+                        className="rounded border-border text-primary focus:ring-primary" 
+                        defaultChecked={editingProject?.team.includes(member.id)}
+                      />
                       <span className="text-sm text-text-primary">{member.name}</span>
                     </label>
                   ))}
                 </div>
               </div>
 
-              <div>
-                <label htmlFor="notes" className="input-label">Project Notes</label>
-                <textarea id="notes" className="input min-h-[100px]" placeholder="Add specific requirements, scope details, or notes..."></textarea>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button type="submit" className="btn btn-primary flex-1">Create Project</button>
+              <div className="flex justify-end gap-3 pt-4 border-t border-border">
                 <button 
                   type="button" 
-                  className="btn btn-outline flex-1"
                   onClick={() => setIsAddModalOpen(false)}
+                  className="btn btn-ghost"
                 >
                   Cancel
                 </button>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary"
+                >
+                  {editingProject ? 'Save Changes' : 'Add Project'}
+                </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Team Workload Panel */}
-      {isWorkloadPanelOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex justify-end">
-          <div className="bg-surface w-full max-w-md h-full shadow-2xl p-6 overflow-y-auto animate-slide-left">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-heading font-bold text-text-primary">Team Workload</h3>
-              <button 
-                onClick={() => setIsWorkloadPanelOpen(false)}
-                className="p-2 rounded-lg hover:bg-surface-hover transition-smooth"
-              >
-                <svg className="w-6 h-6 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-              </button>
-            </div>
-            
-            <div className="space-y-6">
-              {MOCK_TEAM.map(member => {
-                const assignedProjects = MOCK_PROJECTS.filter(p => p.team.includes(member.id));
-                const activeProjects = assignedProjects.filter(p => p.status === 'active');
-                
-                return (
-                  <div key={member.id} className="border border-border rounded-xl p-4">
-                    <div className="flex items-center gap-3 mb-3">
-                      <img src={member.avatar} alt={member.name} className="w-10 h-10 rounded-full object-cover" />
-                      <div>
-                        <p className="font-bold text-text-primary">{member.name}</p>
-                        <p className="text-xs text-text-secondary">{member.role}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-text-secondary">Active Projects</span>
-                        <span className="font-medium text-text-primary">{activeProjects.length}</span>
-                      </div>
-                      <div className="w-full bg-secondary-100 rounded-full h-2">
-                        <div 
-                          className={`h-2 rounded-full ${activeProjects.length > 3 ? 'bg-warning' : 'bg-primary'}`} 
-                          style={{ width: `${Math.min(activeProjects.length * 20, 100)}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
           </div>
         </div>
       )}

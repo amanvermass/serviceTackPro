@@ -14,17 +14,17 @@ export interface TeamMember {
 export interface Project {
   id: string;
   client: string;
-  clientId: string;
+  clientId?: string;
   name: string;
   type: string;
   startDate: string;
   endDate: string;
   monthlyValue: number;
-  freeChanges: { used: number; total: number };
-  paidChanges: number;
+  freeChanges?: { used: number; total: number };
+  paidChanges?: number;
   team: string[]; // IDs of assigned team members
   status: 'active' | 'pending' | 'completed' | 'on-hold';
-  notes: string;
+  notes?: string;
   recentChanges?: { title: string; desc: string; date: string; type: 'free' | 'paid'; cost?: number; author: string }[];
 }
 

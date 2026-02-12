@@ -83,6 +83,10 @@ export default function Header() {
     return pathname === path ? 'bg-primary-50 text-primary-700' : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary';
   };
 
+  const isParentActive = (path: string) => {
+    return pathname.startsWith(path) ? 'bg-primary-50 text-primary-700' : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary';
+  };
+
   return (
     <>
       <header className="bg-surface border-b border-border fixed top-0 left-0 right-0 z-50 shadow-sm w-full max-w-[100vw]">
@@ -107,9 +111,25 @@ export default function Header() {
               <Link href="/client-management" className={`px-4 py-2 rounded-lg text-sm font-medium transition-smooth ${isActive('/client-management')}`}>
                 Clients
               </Link>
-              <Link href="/domain-management" className={`px-4 py-2 rounded-lg text-sm font-medium transition-smooth ${isActive('/domain-management')}`}>
-                Domains
-              </Link>
+              
+              {/* Domains Dropdown */}
+              <div className="relative group">
+                <button className={`px-4 py-2 rounded-lg text-sm font-medium transition-smooth flex items-center gap-1 cursor-default ${isParentActive('/domain-management')}`}>
+                  Domains
+                  <svg className="w-4 h-4 transition-transform group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <div className="absolute top-full left-0 mt-1 w-48 bg-surface border border-border rounded-lg shadow-lg py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-left">
+                  <Link href="/domain-management" className={`block px-4 py-2 text-sm transition-colors ${pathname === '/domain-management' ? 'bg-primary-50 text-primary-700' : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary'}`}>
+                    All Domains
+                  </Link>
+                  <Link href="/domain-management/vendors" className={`block px-4 py-2 text-sm transition-colors ${pathname === '/domain-management/vendors' ? 'bg-primary-50 text-primary-700' : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary'}`}>
+                    Vendors
+                  </Link>
+                </div>
+              </div>
+
               <Link href="/hosting-management" className={`px-4 py-2 rounded-lg text-sm font-medium transition-smooth ${isActive('/hosting-management')}`}>
                 Hosting
               </Link>
@@ -263,6 +283,9 @@ export default function Header() {
           </Link>
           <Link href="/domain-management" className={`px-4 py-2 rounded-lg text-sm font-medium ${isActive('/domain-management')}`}>
             Domains
+          </Link>
+          <Link href="/domain-management/vendors" className={`px-4 py-2 rounded-lg text-sm font-medium ${isActive('/domain-management/vendors')} ml-4 border-l-2 border-border`}>
+            Vendors
           </Link>
           <Link href="/hosting-management" className={`px-4 py-2 rounded-lg text-sm font-medium ${isActive('/hosting-management')}`}>
             Hosting

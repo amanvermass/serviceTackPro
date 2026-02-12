@@ -2,11 +2,12 @@
 export interface HostingAccount {
   id: string;
   clientName: string;
-  clientDomain: string;
-  clientInitials: string;
-  provider: 'AWS' | 'DigitalOcean' | 'Bluehost' | 'SiteGround' | 'HostGator';
-  providerLogo: string;
-  serviceType: 'Cloud Hosting' | 'VPS' | 'Shared Hosting' | 'Dedicated Server';
+  clientDomain?: string; // Kept for backward compatibility
+  domain?: string; // New field from API
+  clientInitials?: string;
+  provider: any; // Allow object or string
+  providerLogo?: string;
+  serviceType: any; // Allow object or string
   renewalDate: string;
   daysLeft: number;
   monthlyCost: number;
@@ -15,17 +16,18 @@ export interface HostingAccount {
   diskUsage: number; // percentage
   diskLabel: string;
   status: 'Active' | 'Expiring Soon' | 'Expired';
-  serverInfo: {
-    ipAddress: string;
-    os: string;
-    region: string;
+  serverInfo?: {
+    ipAddress?: string;
+    os?: string;
+    region?: string;
     phpVersion?: string;
     nodeVersion?: string;
-    dbType: string;
-    uptime: string;
+    dbType?: string;
+    uptime?: string;
   };
-  features: string[];
-  recentActivity: {
+  features?: string[];
+  notes?: string; // New field from API
+  recentActivity?: {
     id: string;
     action: string;
     date: string;

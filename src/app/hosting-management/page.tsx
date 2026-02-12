@@ -1,43 +1,150 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Tooltip from '@/components/Tooltip';
-import { MOCK_HOSTING_ACCOUNTS, HostingAccount } from '@/data/mock-hosting-data';
+import { HostingAccount } from '@/data/mock-hosting-data';
+import { toast } from 'react-hot-toast';
+import TableShimmer from '@/components/TableShimmer';
 
 export default function HostingManagement() {
   const router = useRouter();
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<HostingAccount | null>(null);
+  const [hostingAccounts, setHostingAccounts] = useState<HostingAccount[]>([]);
+  const [providers, setProviders] = useState<any[]>([]);
+  const [serviceTypes, setServiceTypes] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [providerFilter, setProviderFilter] = useState('all');
   const [serviceTypeFilter, setServiceTypeFilter] = useState('all');
   const [renewalFilter, setRenewalFilter] = useState('all');
 
-  // Filtered Data
-  const filteredAccounts = useMemo(() => {
-    return MOCK_HOSTING_ACCOUNTS.filter(account => {
-      const matchesSearch = 
-        account.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        account.provider.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        account.serviceType.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesProvider = providerFilter === 'all' || account.provider.toLowerCase() === providerFilter.toLowerCase();
-      const matchesServiceType = serviceTypeFilter === 'all' || account.serviceType.toLowerCase() === serviceTypeFilter.toLowerCase();
-      
-      let matchesRenewal = true;
-      if (renewalFilter === 'expiring') matchesRenewal = account.status === 'Expiring Soon';
-      if (renewalFilter === 'active') matchesRenewal = account.status === 'Active';
-      if (renewalFilter === 'expired') matchesRenewal = account.status === 'Expired';
 
-      return matchesSearch && matchesProvider && matchesServiceType && matchesRenewal;
-    });
+  // Fetch providers and service types on mount
+  useEffect(() => {
+    const fetchMetadata = async () => {
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        const token = localStorage.getItem('token');
+        
+        // Fetch providers
+        try {
+          const providersResponse = await fetch(`${apiUrl}/api/master/provider`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (providersResponse.ok) {
+            const providersData = await providersResponse.json();
+            setProviders(providersData);
+          }
+        } catch (e) {
+           console.error('Error fetching providers:', e);
+        }
+        
+        // Fetch service types
+        try {
+          const serviceTypesResponse = await fetch(`${apiUrl}/api/master/service-type`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (serviceTypesResponse.ok) {
+            const serviceTypesData = await serviceTypesResponse.json();
+            setServiceTypes(serviceTypesData);
+          }
+        } catch (e) {
+          console.error('Error fetching service types:', e);
+        }
+      } catch (error) {
+        console.error('Error fetching metadata:', error);
+      }
+    };
+    
+    fetchMetadata();
+  }, []);
+
+  // Fetch hosting accounts when filters change
+  useEffect(() => {
+    const fetchHostingAccounts = async () => {
+      setIsLoading(true);
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        const token = localStorage.getItem('token');
+        
+        const params = new URLSearchParams();
+        if (searchTerm) params.append('search', searchTerm);
+        if (providerFilter && providerFilter !== 'all') params.append('provider', providerFilter);
+        if (serviceTypeFilter && serviceTypeFilter !== 'all') params.append('serviceType', serviceTypeFilter);
+        if (renewalFilter && renewalFilter !== 'all') params.append('status', renewalFilter);
+
+        const response = await fetch(`${apiUrl}/api/hosting?${params.toString()}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+           const data = await response.json();
+           // Map API data to HostingAccount interface
+           const mappedData = data.map((item: any) => ({
+             id: item._id,
+             clientName: item.clientName,
+             domain: item.domain,
+             clientDomain: item.domain, // Compatibility
+             clientInitials: item.clientName ? item.clientName.substring(0, 2).toUpperCase() : '??',
+             provider: item.provider,
+             serviceType: item.serviceType,
+             renewalDate: item.renewalDate,
+             monthlyCost: item.monthlyCost,
+             notes: item.notes,
+             // Computed/Default values for UI
+             daysLeft: Math.ceil((new Date(item.renewalDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
+             status: new Date(item.renewalDate) < new Date() ? 'Expired' : (new Date(item.renewalDate).getTime() - Date.now() < 30 * 24 * 60 * 60 * 1000 ? 'Expiring Soon' : 'Active'),
+             bandwidthUsage: 0,
+             bandwidthLabel: 'N/A',
+             diskUsage: 0,
+             diskLabel: 'N/A',
+             providerLogo: '',
+             serverInfo: {},
+             features: item.notes ? [item.notes] : [],
+             recentActivity: []
+           }));
+           setHostingAccounts(mappedData);
+        }
+      } catch (error) {
+         console.error('Error fetching hosting accounts:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      fetchHostingAccounts();
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
   }, [searchTerm, providerFilter, serviceTypeFilter, renewalFilter]);
+
+
+  // Helper to safely get string value from potentially object fields
+  const getProviderName = (provider: any) => typeof provider === 'object' && provider !== null ? provider.name : provider;
+  const getServiceTypeName = (type: any) => typeof type === 'object' && type !== null ? type.name : type;
+
+  // Filtered Data - Data is now filtered on server side
+  const filteredAccounts = hostingAccounts;
 
   const handleRowClick = (account: HostingAccount) => {
     router.push(`/hosting-management/${account.id}`);
+  };
+
+  const handleEditClick = (account: HostingAccount) => {
+    setEditingAccount(account);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setEditingAccount(null);
+    setIsModalOpen(false);
   };
 
   const resetFilters = () => {
@@ -45,6 +152,99 @@ export default function HostingManagement() {
     setProviderFilter('all');
     setServiceTypeFilter('all');
     setRenewalFilter('all');
+  };
+
+  const handleSaveHosting = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    const formData = new FormData(e.currentTarget);
+    const data = {
+      clientName: formData.get('clientName') as string,
+      domain: formData.get('domain') as string,
+      provider: formData.get('provider') as string, // Should be ID
+      serviceType: formData.get('serviceType') as string, // Should be ID
+      renewalDate: formData.get('renewalDate') as string,
+      monthlyCost: Number(formData.get('monthlyCost')),
+      notes: formData.get('notes') as string,
+    };
+
+    try {
+       const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+       const token = localStorage.getItem('token');
+       
+       let response;
+       if (editingAccount) {
+         // PUT Request
+         response = await fetch(`${apiUrl}/api/hosting/${editingAccount.id}`, {
+           method: 'PUT',
+           headers: {
+             'Content-Type': 'application/json',
+             'Authorization': `Bearer ${token}`
+           },
+           body: JSON.stringify(data)
+         });
+       } else {
+         // POST Request
+         response = await fetch(`${apiUrl}/api/hosting`, {
+           method: 'POST',
+           headers: {
+             'Content-Type': 'application/json',
+             'Authorization': `Bearer ${token}`
+           },
+           body: JSON.stringify(data)
+         });
+       }
+
+       if (response.ok) {
+         // Refresh list
+         // We could optimistically update, but simpler to trigger refetch or update state manually
+         // Since we rely on server filtering/mapping, let's trigger refetch by forcing update or just refetching.
+         // For now, let's just reload page or refetch. Since we have useEffect dependent on filters, 
+         // we can just re-trigger it? Or just manually update state.
+         
+         const savedAccount = await response.json();
+         // Map the saved account
+         const mappedSavedAccount = {
+             id: savedAccount._id,
+             clientName: savedAccount.clientName,
+             domain: savedAccount.domain,
+             clientDomain: savedAccount.domain,
+             clientInitials: savedAccount.clientName ? savedAccount.clientName.substring(0, 2).toUpperCase() : '??',
+             provider: savedAccount.provider, // Might be ID or Object depending on backend response
+             serviceType: savedAccount.serviceType,
+             renewalDate: savedAccount.renewalDate,
+             monthlyCost: savedAccount.monthlyCost,
+             notes: savedAccount.notes,
+             daysLeft: Math.ceil((new Date(savedAccount.renewalDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
+             status: new Date(savedAccount.renewalDate) < new Date() ? 'Expired' : (new Date(savedAccount.renewalDate).getTime() - Date.now() < 30 * 24 * 60 * 60 * 1000 ? 'Expiring Soon' : 'Active') as any,
+             bandwidthUsage: 0,
+             bandwidthLabel: 'N/A',
+             diskUsage: 0,
+             diskLabel: 'N/A',
+             providerLogo: '',
+             serverInfo: {},
+             features: savedAccount.notes ? [savedAccount.notes] : [],
+             recentActivity: []
+         };
+
+         if (editingAccount) {
+            setHostingAccounts(prev => prev.map(a => a.id === mappedSavedAccount.id ? mappedSavedAccount : a));
+            toast.success('Hosting account updated successfully');
+         } else {
+            setHostingAccounts(prev => [...prev, mappedSavedAccount]);
+            toast.success('Hosting account added successfully');
+         }
+         handleCloseModal();
+       } else {
+         throw new Error('Failed to save hosting account');
+       }
+    } catch (error) {
+      console.error('Error saving hosting:', error);
+      toast.error('Failed to save hosting account');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -70,7 +270,10 @@ export default function HostingManagement() {
               <button 
                 id="addHostingBtn" 
                 className="btn btn-primary flex items-center gap-2"
-                onClick={() => setIsAddModalOpen(true)}
+                onClick={() => {
+                    setEditingAccount(null);
+                    setIsModalOpen(true);
+                }}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/>
@@ -93,7 +296,7 @@ export default function HostingManagement() {
               </div>
               <span className="badge badge-primary">Active</span>
             </div>
-            <h3 className="text-2xl font-heading font-bold text-text-primary mb-1">{MOCK_HOSTING_ACCOUNTS.length}</h3>
+            <h3 className="text-2xl font-heading font-bold text-text-primary mb-1">{hostingAccounts.length}</h3>
             <p className="text-sm text-text-secondary">Total Hosting Accounts</p>
           </div>
 
@@ -108,7 +311,7 @@ export default function HostingManagement() {
               <span className="badge badge-warning">30 Days</span>
             </div>
             <h3 className="text-2xl font-heading font-bold text-text-primary mb-1">
-              {MOCK_HOSTING_ACCOUNTS.filter(a => a.status === 'Expiring Soon').length}
+              {hostingAccounts.filter(a => a.status === 'Expiring Soon').length}
             </h3>
             <p className="text-sm text-text-secondary">Expiring Soon</p>
           </div>
@@ -124,7 +327,7 @@ export default function HostingManagement() {
               <span className="text-xs text-success font-medium">+12%</span>
             </div>
             <h3 className="text-2xl font-heading font-bold text-text-primary mb-1">
-              ${MOCK_HOSTING_ACCOUNTS.reduce((sum, acc) => sum + acc.monthlyCost, 0).toLocaleString()}
+              ${hostingAccounts.reduce((sum, acc) => sum + acc.monthlyCost, 0).toLocaleString()}
             </h3>
             <p className="text-sm text-text-secondary">Monthly Cost</p>
           </div>
@@ -140,7 +343,7 @@ export default function HostingManagement() {
               <span className="text-xs text-text-secondary">Avg</span>
             </div>
             <h3 className="text-2xl font-heading font-bold text-text-primary mb-1">
-              {Math.round(MOCK_HOSTING_ACCOUNTS.reduce((sum, acc) => sum + acc.bandwidthUsage, 0) / MOCK_HOSTING_ACCOUNTS.length)}%
+              {hostingAccounts.length > 0 ? Math.round(hostingAccounts.reduce((sum, acc) => sum + acc.bandwidthUsage, 0) / hostingAccounts.length) : 0}%
             </h3>
             <p className="text-sm text-text-secondary">Avg Bandwidth Usage</p>
           </div>
@@ -179,11 +382,11 @@ export default function HostingManagement() {
                 onChange={(e) => setProviderFilter(e.target.value)}
               >
                 <option value="all">All Providers</option>
-                <option value="aws">AWS</option>
-                <option value="digitalocean">DigitalOcean</option>
-                <option value="bluehost">Bluehost</option>
-                <option value="siteground">SiteGround</option>
-                <option value="hostgator">HostGator</option>
+                {providers.map(p => {
+                  const name = typeof p === 'object' ? p.name : p;
+                  const id = typeof p === 'object' ? p._id : p;
+                  return <option key={id} value={id}>{name}</option>;
+                })}
               </select>
             </div>
 
@@ -197,10 +400,11 @@ export default function HostingManagement() {
                 onChange={(e) => setServiceTypeFilter(e.target.value)}
               >
                 <option value="all">All Types</option>
-                <option value="shared">Shared Hosting</option>
-                <option value="vps">VPS</option>
-                <option value="dedicated">Dedicated Server</option>
-                <option value="cloud">Cloud Hosting</option>
+                {serviceTypes.map(s => {
+                  const name = typeof s === 'object' ? s.name : s;
+                  const id = typeof s === 'object' ? s._id : s;
+                  return <option key={id} value={id}>{name}</option>;
+                })}
               </select>
             </div>
 
@@ -304,100 +508,106 @@ export default function HostingManagement() {
                   </th>
                   <th>Bandwidth</th>
                   <th>Status</th>
-                  <th className="flex items-center justify-end">Actions</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
-              <tbody id="hostingTableBody">
-                {filteredAccounts.map((account) => (
-                  <tr 
-                    key={account.id}
-                    className="cursor-pointer hover:bg-surface-hover transition-smooth hosting-row"
-                    onClick={() => handleRowClick(account)}
-                  >
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <input type="checkbox" className="w-4 h-4 rounded border-border text-primary focus:ring-primary row-checkbox" aria-label="Select hosting account" />
-                    </td>
-                    <td>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-primary-100 flex items-center justify-center flex-shrink-0">
-                          <span className="text-primary-700 font-semibold text-sm">{account.clientInitials}</span>
+              <tbody>
+                {isLoading ? (
+                  <TableShimmer columns={9} rows={10} />
+                ) : (
+                  filteredAccounts.map(account => (
+                    <tr key={account.id} className="hover:bg-secondary-50 transition-smooth cursor-pointer" onClick={() => handleRowClick(account)}>
+                      <td>
+                        <input type="checkbox" className="w-4 h-4 rounded border-border text-primary focus:ring-primary" onClick={(e) => e.stopPropagation()} />
+                      </td>
+                      <td>
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-xs">
+                            {account.clientInitials}
+                          </div>
+                          <div>
+                            <p className="font-medium text-text-primary">{account.clientName}</p>
+                            <p className="text-xs text-text-secondary">{account.domain || account.clientDomain}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-text-primary">{account.clientName}</p>
-                          <p className="text-xs text-text-secondary">{account.clientDomain}</p>
+                      </td>
+                      <td>
+                        <div className="flex items-center gap-2">
+                          {account.providerLogo && <img src={account.providerLogo} alt={getProviderName(account.provider)} className="w-5 h-5 object-contain" />}
+                          <span className="text-text-primary">{getProviderName(account.provider)}</span>
                         </div>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="flex items-center gap-2">
-                        <img src={account.providerLogo} alt={account.provider} className="w-5 h-5 object-contain" />
-                        <span className="text-text-primary">{account.provider}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="badge badge-secondary">{account.serviceType}</span>
-                    </td>
-                    <td>
-                      <p className="text-text-primary">{new Date(account.renewalDate).toLocaleDateString()}</p>
-                      <p className={`text-xs ${account.daysLeft < 30 ? 'text-warning font-medium' : 'text-text-tertiary'}`}>
-                        {account.daysLeft} days left
-                      </p>
-                    </td>
-                    <td className="font-medium text-text-primary">
-                      ${account.monthlyCost.toFixed(2)}
-                    </td>
-                    <td>
-                      <div className="w-full max-w-[120px]">
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-text-secondary">{account.bandwidthUsage}%</span>
+                      </td>
+                      <td>
+                        <span className="badge badge-secondary">{getServiceTypeName(account.serviceType)}</span>
+                      </td>
+                      <td>
+                        <p className="text-text-primary">{new Date(account.renewalDate).toLocaleDateString()}</p>
+                        <p className={`text-xs ${account.daysLeft < 30 ? 'text-warning font-medium' : 'text-text-tertiary'}`}>
+                          {account.daysLeft} days left
+                        </p>
+                      </td>
+                      <td className="font-medium text-text-primary">
+                        ${account.monthlyCost.toFixed(2)}
+                      </td>
+                      <td>
+                        <div className="w-full max-w-[120px]">
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-text-secondary">{account.bandwidthUsage}%</span>
+                          </div>
+                          <div className="w-full bg-secondary-100 rounded-full h-1.5">
+                            <div 
+                              className={`h-1.5 rounded-full ${account.bandwidthUsage > 80 ? 'bg-warning' : 'bg-primary'}`} 
+                              style={{ width: `${account.bandwidthUsage}%` }}
+                            ></div>
+                          </div>
+                          <p className="text-[10px] text-text-tertiary mt-1 truncate">{account.bandwidthLabel}</p>
                         </div>
-                        <div className="w-full bg-secondary-100 rounded-full h-1.5">
-                          <div 
-                            className={`h-1.5 rounded-full ${account.bandwidthUsage > 80 ? 'bg-warning' : 'bg-primary'}`} 
-                            style={{ width: `${account.bandwidthUsage}%` }}
-                          ></div>
+                      </td>
+                      <td>
+                        <span className={`badge ${
+                          account.status === 'Active' ? 'badge-success' : 
+                          account.status === 'Expiring Soon' ? 'badge-warning' : 'badge-danger'
+                        }`}>
+                          {account.status}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                          <button className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary transition-smooth" title="View Details" onClick={() => handleRowClick(account)}>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </button>
+                          <button 
+                            className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary transition-smooth" 
+                            title="Edit"
+                            onClick={() => handleEditClick(account)}
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
                         </div>
-                        <p className="text-[10px] text-text-tertiary mt-1 truncate">{account.bandwidthLabel}</p>
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`badge ${
-                        account.status === 'Active' ? 'badge-success' : 
-                        account.status === 'Expiring Soon' ? 'badge-warning' : 'badge-danger'
-                      }`}>
-                        {account.status}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                        <button className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary transition-smooth" title="View Details">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        </button>
-                        <button className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary transition-smooth" title="Edit">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </div>
-        {/* Add Hosting Modal */}
-        {isAddModalOpen && (
+        {/* Modal */}
+        {isModalOpen && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bg-surface rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
               <div className="p-6 border-b border-border sticky top-0 bg-surface z-10">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-heading font-bold text-text-primary">Add New Hosting Account</h3>
+                  <h3 className="text-xl font-heading font-bold text-text-primary">
+                    {editingAccount ? 'Edit Hosting Account' : 'Add New Hosting Account'}
+                  </h3>
                   <button 
-                    onClick={() => setIsAddModalOpen(false)}
+                    onClick={handleCloseModal}
                     className="p-2 rounded-lg hover:bg-surface-hover transition-smooth"
                     aria-label="Close modal"
                   >
@@ -408,42 +618,67 @@ export default function HostingManagement() {
                 </div>
               </div>
               
-              <form className="p-6 space-y-6" onSubmit={(e) => {
-                e.preventDefault();
-                alert('Hosting account added successfully (Mock)');
-                setIsAddModalOpen(false);
-              }}>
+              <form className="p-6 space-y-6" onSubmit={handleSaveHosting}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="clientName" className="input-label">Client Name</label>
-                    <input type="text" id="clientName" className="input" placeholder="e.g. TechCorp Solutions" required />
+                    <input 
+                      type="text" 
+                      id="clientName" 
+                      name="clientName" 
+                      className="input" 
+                      placeholder="e.g. TechCorp Solutions" 
+                      defaultValue={editingAccount?.clientName}
+                      required 
+                    />
                   </div>
                   <div>
-                    <label htmlFor="clientDomain" className="input-label">Domain</label>
-                    <input type="text" id="clientDomain" className="input" placeholder="e.g. techcorp.io" required />
+                    <label htmlFor="domain" className="input-label">Domain</label>
+                    <input 
+                      type="text" 
+                      id="domain" 
+                      name="domain" 
+                      className="input" 
+                      placeholder="e.g. techcorp.io" 
+                      defaultValue={editingAccount?.domain || editingAccount?.clientDomain}
+                      required 
+                    />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="provider" className="input-label">Provider</label>
-                    <select id="provider" className="input" required>
+                    <select 
+                      id="provider" 
+                      name="provider" 
+                      className="input" 
+                      defaultValue={editingAccount?.provider && (typeof editingAccount.provider === 'object' ? editingAccount.provider._id : editingAccount.provider)}
+                      required
+                    >
                       <option value="">Select Provider...</option>
-                      <option value="AWS">AWS</option>
-                      <option value="DigitalOcean">DigitalOcean</option>
-                      <option value="Bluehost">Bluehost</option>
-                      <option value="SiteGround">SiteGround</option>
-                      <option value="HostGator">HostGator</option>
+                    {providers.map(p => {
+                        const name = typeof p === 'object' ? p.name : p;
+                        const id = typeof p === 'object' ? p._id : p;
+                        return <option key={id} value={id}>{name}</option>;
+                      })}
                     </select>
                   </div>
                   <div>
                     <label htmlFor="serviceType" className="input-label">Service Type</label>
-                    <select id="serviceType" className="input" required>
+                    <select 
+                      id="serviceType" 
+                      name="serviceType" 
+                      className="input" 
+                      defaultValue={editingAccount?.serviceType && (typeof editingAccount.serviceType === 'object' ? editingAccount.serviceType._id : editingAccount.serviceType)}
+                      required
+                    >
                       <option value="">Select Type...</option>
-                      <option value="Cloud Hosting">Cloud Hosting</option>
-                      <option value="VPS">VPS</option>
-                      <option value="Shared Hosting">Shared Hosting</option>
-                      <option value="Dedicated Server">Dedicated Server</option>
+                    {serviceTypes.map(s => {
+                        const name = typeof s === 'object' ? s.name : s;
+                        const id = typeof s === 'object' ? s._id : s;
+                        return <option key={id} value={id}>{name}</option>;
+                      })}
                     </select>
                   </div>
                 </div>
@@ -451,25 +686,51 @@ export default function HostingManagement() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="renewalDate" className="input-label">Renewal Date</label>
-                    <input type="date" id="renewalDate" className="input" required />
+                    <input 
+                      type="date" 
+                      id="renewalDate" 
+                      name="renewalDate" 
+                      className="input" 
+                      defaultValue={editingAccount?.renewalDate ? new Date(editingAccount.renewalDate).toISOString().split('T')[0] : ''}
+                      required 
+                    />
                   </div>
                   <div>
                     <label htmlFor="monthlyCost" className="input-label">Monthly Cost ($)</label>
-                    <input type="number" id="monthlyCost" className="input" placeholder="0.00" min="0" step="0.01" required />
+                    <input 
+                      type="number" 
+                      id="monthlyCost" 
+                      name="monthlyCost" 
+                      className="input" 
+                      placeholder="0.00" 
+                      min="0" 
+                      step="0.01" 
+                      defaultValue={editingAccount?.monthlyCost}
+                      required 
+                    />
                   </div>
                 </div>
 
                 <div>
                   <label htmlFor="notes" className="input-label">Notes / Features</label>
-                  <textarea id="notes" className="input min-h-[100px]" placeholder="Add server details, features, or other notes..."></textarea>
+                  <textarea 
+                    id="notes" 
+                    name="notes" 
+                    className="input min-h-[100px]" 
+                    placeholder="Add server details, features, or other notes..."
+                    defaultValue={editingAccount?.notes || (editingAccount?.features ? editingAccount.features.join('\n') : '')}
+                  ></textarea>
                 </div>
 
                 <div className="flex gap-3 pt-4">
-                  <button type="submit" className="btn btn-primary flex-1">Add Account</button>
+                  <button type="submit" className="btn btn-primary flex-1" disabled={isSubmitting}>
+                    {isSubmitting ? 'Saving...' : (editingAccount ? 'Save Changes' : 'Add Account')}
+                  </button>
                   <button 
                     type="button" 
                     className="btn btn-outline flex-1"
-                    onClick={() => setIsAddModalOpen(false)}
+                    onClick={handleCloseModal}
+                    disabled={isSubmitting}
                   >
                     Cancel
                   </button>
