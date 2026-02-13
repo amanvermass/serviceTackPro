@@ -25,6 +25,7 @@ export default function VendorManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedLogo, setSelectedLogo] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -44,7 +45,8 @@ export default function VendorManagement() {
         const data = await response.json();
         // Map API data to Vendor interface
         // Note: Stats like activeDomains, costs are mocked for now as they require aggregation from domain/hosting data
-        const mappedVendors: Vendor[] = data.map((item: any) => ({
+        const items = Array.isArray(data) ? data : (data.data || []);
+        const mappedVendors: Vendor[] = items.map((item: any) => ({
           id: item._id,
           name: item.name,
           logo: item.logo || (item.name ? item.name.substring(0, 2).toUpperCase() : '??'),
@@ -74,6 +76,7 @@ export default function VendorManagement() {
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      setLogoFile(file);
       const objectUrl = URL.createObjectURL(file);
       setSelectedLogo(objectUrl);
     }
@@ -85,12 +88,13 @@ export default function VendorManagement() {
     
     try {
       const formData = new FormData(e.target as HTMLFormElement);
-      const data = {
-        name: formData.get('name') as string,
-        website: formData.get('website') as string || '',
-        // logo: selectedLogo, 
-        type: 'Registrar' 
-      };
+      // Construct FormData for multipart/form-data request
+      const apiFormData = new FormData();
+      apiFormData.append('name', formData.get('name') as string);
+      
+      if (logoFile) {
+        apiFormData.append('logo', logoFile);
+      }
 
       const token = localStorage.getItem('token');
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
@@ -100,19 +104,17 @@ export default function VendorManagement() {
         response = await fetch(`${apiUrl}/api/master/provider/${editingVendor.id}`, {
           method: 'PUT',
           headers: {
-            'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify(data)
+          body: apiFormData
         });
       } else {
         response = await fetch(`${apiUrl}/api/master/provider`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify(data)
+          body: apiFormData
         });
       }
 
@@ -121,6 +123,7 @@ export default function VendorManagement() {
         setIsAddVendorModalOpen(false);
         setEditingVendor(null);
         setSelectedLogo(null);
+        setLogoFile(null);
         if (fileInputRef.current) {
           fileInputRef.current.value = '';
         }
@@ -139,6 +142,7 @@ export default function VendorManagement() {
   const handleEditClick = (vendor: Vendor) => {
     setEditingVendor(vendor);
     setSelectedLogo(vendor.logo);
+    setLogoFile(null);
     setIsAddVendorModalOpen(true);
   };
 
@@ -195,6 +199,7 @@ export default function VendorManagement() {
               onClick={() => {
                 setEditingVendor(null);
                 setSelectedLogo(null);
+                setLogoFile(null);
                 setIsAddVendorModalOpen(true);
               }}
               className="btn btn-primary flex items-center gap-2 w-full sm:w-auto"
@@ -428,17 +433,6 @@ export default function VendorManagement() {
                   placeholder="e.g. GoDaddy"
                 />
               </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-text-primary">Website</label>
-                <input 
-                  type="url" 
-                  name="website"
-                  defaultValue={editingVendor?.website}
-                  className="w-full px-4 py-2 bg-surface-50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  placeholder="e.g. https://godaddy.com"
-                />
-              </div>
               
               <div className="space-y-2">
                 <label className="text-sm font-medium text-text-primary">Vendor Logo</label>
@@ -450,6 +444,7 @@ export default function VendorManagement() {
                         type="button"
                         onClick={() => {
                           setSelectedLogo(null);
+                          setLogoFile(null);
                           if (fileInputRef.current) {
                             fileInputRef.current.value = '';
                           }

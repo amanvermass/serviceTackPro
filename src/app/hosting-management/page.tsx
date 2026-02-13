@@ -39,10 +39,11 @@ export default function HostingManagement() {
           });
           if (providersResponse.ok) {
             const providersData = await providersResponse.json();
-            setProviders(providersData);
+            setProviders(Array.isArray(providersData) ? providersData : []);
           }
         } catch (e) {
            console.error('Error fetching providers:', e);
+           setProviders([]);
         }
         
         // Fetch service types
@@ -52,10 +53,11 @@ export default function HostingManagement() {
           });
           if (serviceTypesResponse.ok) {
             const serviceTypesData = await serviceTypesResponse.json();
-            setServiceTypes(serviceTypesData);
+            setServiceTypes(Array.isArray(serviceTypesData) ? serviceTypesData : []);
           }
         } catch (e) {
           console.error('Error fetching service types:', e);
+          setServiceTypes([]);
         }
       } catch (error) {
         console.error('Error fetching metadata:', error);
@@ -86,7 +88,8 @@ export default function HostingManagement() {
         if (response.ok) {
            const data = await response.json();
            // Map API data to HostingAccount interface
-           const mappedData = data.map((item: any) => ({
+           const items = Array.isArray(data) ? data : (data.data || []);
+           const mappedData = items.map((item: any) => ({
              id: item._id,
              clientName: item.clientName,
              domain: item.domain,
@@ -382,7 +385,7 @@ export default function HostingManagement() {
                 onChange={(e) => setProviderFilter(e.target.value)}
               >
                 <option value="all">All Providers</option>
-                {providers.map(p => {
+                {Array.isArray(providers) && providers.map(p => {
                   const name = typeof p === 'object' ? p.name : p;
                   const id = typeof p === 'object' ? p._id : p;
                   return <option key={id} value={id}>{name}</option>;
@@ -400,7 +403,7 @@ export default function HostingManagement() {
                 onChange={(e) => setServiceTypeFilter(e.target.value)}
               >
                 <option value="all">All Types</option>
-                {serviceTypes.map(s => {
+                {Array.isArray(serviceTypes) && serviceTypes.map(s => {
                   const name = typeof s === 'object' ? s.name : s;
                   const id = typeof s === 'object' ? s._id : s;
                   return <option key={id} value={id}>{name}</option>;
@@ -657,7 +660,7 @@ export default function HostingManagement() {
                       required
                     >
                       <option value="">Select Provider...</option>
-                    {providers.map(p => {
+                    {Array.isArray(providers) && providers.map(p => {
                         const name = typeof p === 'object' ? p.name : p;
                         const id = typeof p === 'object' ? p._id : p;
                         return <option key={id} value={id}>{name}</option>;
@@ -674,7 +677,7 @@ export default function HostingManagement() {
                       required
                     >
                       <option value="">Select Type...</option>
-                    {serviceTypes.map(s => {
+                    {Array.isArray(serviceTypes) && serviceTypes.map(s => {
                         const name = typeof s === 'object' ? s.name : s;
                         const id = typeof s === 'object' ? s._id : s;
                         return <option key={id} value={id}>{name}</option>;
