@@ -96,7 +96,7 @@ export default function ProjectDetails() {
           
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface p-6 rounded-2xl border border-border shadow-sm">
             <div className="flex items-center gap-5">
-              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl font-bold shadow-inner ${getClientColorClass(selectedProject.clientId)}`}>
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 text-2xl font-bold shadow-inner ${getClientColorClass(selectedProject.clientId || '')}`}>
                 {getClientInitials(selectedProject.client)}
               </div>
               <div>
@@ -253,14 +253,14 @@ export default function ProjectDetails() {
                 <div>
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm font-medium text-text-secondary">Free Changes</span>
-                    <span className="text-sm font-bold text-text-primary">{selectedProject.freeChanges.used}/{selectedProject.freeChanges.total}</span>
+                    <span className="text-sm font-bold text-text-primary">{selectedProject.freeChanges?.used || 0}/{selectedProject.freeChanges?.total || 0}</span>
                   </div>
                   <div className="w-full bg-secondary-100 rounded-full h-2.5 overflow-hidden">
                     <div 
                       className={`h-full rounded-full transition-all duration-500 ${
-                        (selectedProject.freeChanges.used / selectedProject.freeChanges.total) > 0.8 ? 'bg-warning' : 'bg-success'
+                        ((selectedProject.freeChanges?.used || 0) / (selectedProject.freeChanges?.total || 1)) > 0.8 ? 'bg-warning' : 'bg-success'
                       }`} 
-                      style={{ width: `${(selectedProject.freeChanges.used / selectedProject.freeChanges.total) * 100}%` }}
+                      style={{ width: `${((selectedProject.freeChanges?.used || 0) / (selectedProject.freeChanges?.total || 1)) * 100}%` }}
                     ></div>
                   </div>
                   <p className="text-xs text-text-tertiary mt-1.5">Resets on {new Date(selectedProject.startDate).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</p>
