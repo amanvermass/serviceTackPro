@@ -39,7 +39,7 @@ export default function HostingManagement() {
           });
           if (providersResponse.ok) {
             const providersData = await providersResponse.json();
-            setProviders(Array.isArray(providersData) ? providersData : []);
+            setProviders(Array.isArray(providersData) ? providersData : (providersData.data || []));
           }
         } catch (e) {
            console.error('Error fetching providers:', e);
@@ -53,7 +53,7 @@ export default function HostingManagement() {
           });
           if (serviceTypesResponse.ok) {
             const serviceTypesData = await serviceTypesResponse.json();
-            setServiceTypes(Array.isArray(serviceTypesData) ? serviceTypesData : []);
+            setServiceTypes(Array.isArray(serviceTypesData) ? serviceTypesData : (serviceTypesData.data || []));
           }
         } catch (e) {
           console.error('Error fetching service types:', e);

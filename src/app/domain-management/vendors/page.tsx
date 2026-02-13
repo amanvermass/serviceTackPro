@@ -91,6 +91,7 @@ export default function VendorManagement() {
       // Construct FormData for multipart/form-data request
       const apiFormData = new FormData();
       apiFormData.append('name', formData.get('name') as string);
+      apiFormData.append('status', formData.get('status') as string);
       
       if (logoFile) {
         apiFormData.append('logo', logoFile);
@@ -141,7 +142,12 @@ export default function VendorManagement() {
 
   const handleEditClick = (vendor: Vendor) => {
     setEditingVendor(vendor);
-    setSelectedLogo(vendor.logo);
+    if (vendor.logo && (vendor.logo.startsWith('/') || vendor.logo.startsWith('http'))) {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      setSelectedLogo(vendor.logo.startsWith('http') ? vendor.logo : `${apiUrl}${vendor.logo}`);
+    } else {
+      setSelectedLogo(null);
+    }
     setLogoFile(null);
     setIsAddVendorModalOpen(true);
   };
@@ -305,11 +311,20 @@ export default function VendorManagement() {
                     <tr key={vendor.id} className="hover:bg-surface-hover transition-smooth group cursor-pointer">
                       <td>
                         <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0
-                            ${vendor.logo === 'GD' ? 'bg-success-100 text-success-700' : 
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden border border-border
+                            ${(vendor.logo.startsWith('/') || vendor.logo.startsWith('http')) ? 'bg-white' : 
+                              vendor.logo === 'GD' ? 'bg-success-100 text-success-700' : 
                               vendor.logo === 'NC' ? 'bg-primary-100 text-primary-700' : 
                               vendor.logo === 'CF' ? 'bg-warning-100 text-warning-700' : 'bg-secondary-100 text-secondary-700'}`}>
-                            {vendor.logo}
+                            {(vendor.logo.startsWith('/') || vendor.logo.startsWith('http')) ? (
+                              <img 
+                                src={vendor.logo.startsWith('http') ? vendor.logo : `${process.env.NEXT_PUBLIC_API_URL || ''}${vendor.logo}`} 
+                                alt={vendor.name} 
+                                className="w-full h-full object-contain p-1"
+                              />
+                            ) : (
+                              <span className="text-xs font-bold">{vendor.logo}</span>
+                            )}
                           </div>
                           <div>
                             <p className="font-medium text-text-primary">{vendor.name}</p>
@@ -432,6 +447,18 @@ export default function VendorManagement() {
                   className="w-full px-4 py-2 bg-surface-50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                   placeholder="e.g. GoDaddy"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-primary">Status</label>
+                <select 
+                  name="status"
+                  className="w-full px-4 py-2 bg-surface-50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  defaultValue={editingVendor?.status || 'active'}
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
               </div>
               
               <div className="space-y-2">

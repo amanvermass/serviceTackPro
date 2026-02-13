@@ -13,6 +13,7 @@ export default function DomainManagement() {
   const router = useRouter();
   const [domains, setDomains] = useState<Domain[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [vendors, setVendors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddDomainModalOpen, setIsAddDomainModalOpen] = useState(false);
   const [editingDomain, setEditingDomain] = useState<Domain | null>(null);
@@ -141,50 +142,69 @@ export default function DomainManagement() {
     }
   }, [currentPage, searchQuery, statusFilter, vendorFilter, sortConfig]);
 
+  const fetchClients = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/clients?limit=100`, {
+        headers: {
+          'x-auth-token': token,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Map backend data to Client interface
+        const mappedClients: Client[] = data.data.map((item: any) => ({
+          id: item._id,
+          companyName: item.company || item.name,
+          website: item.website || '',
+          logo: '',
+          status: item.status || 'active',
+          industry: '',
+          since: '',
+          notes: '',
+          primaryContact: { name: '', email: '', phone: '', role: '', avatar: '' },
+          address: { street: '', city: '', state: '', zip: '', country: '' },
+          services: { domains: 0, hosting: 0, maintenance: false },
+          billing: { totalSpent: 0, nextInvoiceDate: '', paymentMethod: '' }
+        }));
+        setClients(mappedClients);
+      }
+    } catch (error) {
+      console.error('Error fetching clients:', error);
+    }
+  }, []);
+
+  const fetchVendors = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/master/provider`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && Array.isArray(data.data)) {
+          setVendors(data.data);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching vendors:', error);
+    }
+  }, []);
+
   useEffect(() => {
     fetchDomains();
-  }, [fetchDomains]);
-
-  // Fetch Clients for Dropdown
-  useEffect(() => {
-    const fetchClients = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/clients?limit=100`, {
-          headers: {
-            'x-auth-token': token,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          // Map backend data to Client interface
-          const mappedClients: Client[] = data.data.map((item: any) => ({
-            id: item._id,
-            companyName: item.company || item.name,
-            website: item.website || '',
-            logo: '',
-            status: item.status || 'active',
-            industry: '',
-            since: '',
-            notes: '',
-            primaryContact: { name: '', email: '', phone: '', role: '', avatar: '' },
-            address: { street: '', city: '', state: '', zip: '', country: '' },
-            services: { domains: 0, hosting: 0, maintenance: false },
-            billing: { totalSpent: 0, nextInvoiceDate: '', paymentMethod: '' }
-          }));
-          setClients(mappedClients);
-        }
-      } catch (error) {
-        console.error('Error fetching clients:', error);
-      }
-    };
-
     fetchClients();
-  }, []);
+    fetchVendors();
+  }, [fetchDomains, fetchClients, fetchVendors]);
 
   // Derived State: Filtered & Sorted Domains
   // Since we are doing server-side filtering, we might not need this complex logic anymore
@@ -875,16 +895,17 @@ export default function DomainManagement() {
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="vendorSelect" className="input-label">Registrar</label>
+                      <label htmlFor="vendorSelect" className="input-label">Vendor</label>
                       <select 
+                        name="vendor"
                         id="vendorSelect" 
                         className="input"
-                        defaultValue={editingDomain?.vendor || 'godaddy'}
+                        defaultValue={editingDomain?.vendor || ''}
                       >
-                        <option value="godaddy">GoDaddy</option>
-                        <option value="namecheap">Namecheap</option>
-                        <option value="cloudflare">Cloudflare</option>
-                        <option value="google">Google Domains</option>
+                        <option value="" disabled>Select Vender</option>
+                        {vendors.map((vendor) => (
+                          <option key={vendor._id} value={vendor.name}>{vendor.name}</option>
+                        ))}
                       </select>
                     </div>
                     <div>
