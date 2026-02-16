@@ -25,6 +25,7 @@ export interface Domain {
   expiryStatus: string;
   daysRemaining: number;
   vendor: string; // Registrar
+  vendorId?: string;
   vendorLogo?: string;
   cost: number;
   status: 'expired' | 'expiring' | 'active' | 'renewed';

@@ -51,10 +51,10 @@ export default function VendorManagement() {
           name: item.name,
           logo: item.logo || (item.name ? item.name.substring(0, 2).toUpperCase() : '??'),
           website: item.website || '',
-          activeDomains: 0, // Placeholder: requires domain aggregation
-          avgCost: 0, // Placeholder
-          totalAnnualCost: 0, // Placeholder
-          status: item.status || 'active'
+          activeDomains: item.activeDomains || 0,
+          avgCost: item.avgCost || 0,
+          totalAnnualCost: item.totalAnnualCost || 0,
+          status: (item.status?.toLowerCase() as 'active' | 'inactive') || 'active'
         }));
         setVendors(mappedVendors);
       } else {

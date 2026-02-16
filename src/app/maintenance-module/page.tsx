@@ -4,7 +4,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { MOCK_TEAM, Project, TeamMember } from '@/data/mock-maintenance-data';
+import { MOCK_TEAM, MOCK_PROJECTS, Project, TeamMember } from '@/data/mock-maintenance-data';
 import { toast } from 'react-hot-toast';
 
 // Helper Component: MultiSelect
@@ -128,6 +128,11 @@ export default function MaintenanceModule() {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const token = localStorage.getItem('token');
+
+      if (!token) {
+        setProjects(MOCK_PROJECTS);
+        return;
+      }
       
       const response = await fetch(`${apiUrl}/api/maintenance`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -135,8 +140,9 @@ export default function MaintenanceModule() {
       
       if (response.ok) {
         const data = await response.json();
-        // Map API data to Project interface
-        const mappedData: Project[] = data.map((item: any) => ({
+        const items = Array.isArray(data) ? data : (data.data || []);
+
+        const mappedData: Project[] = items.map((item: any) => ({
           id: item._id,
           client: item.client || item.clientName || 'Unknown Client',
           clientId: item.clientId,
@@ -152,15 +158,14 @@ export default function MaintenanceModule() {
           notes: item.notes || '',
           recentChanges: item.recentChanges || []
         }));
-        setProjects(mappedData);
+        setProjects(mappedData.length > 0 ? mappedData : MOCK_PROJECTS);
       } else {
         console.error('Failed to fetch projects');
-        // Fallback to empty or mock if needed, but better to show empty state
-        // setProjects(MOCK_PROJECTS); 
+        setProjects(MOCK_PROJECTS);
       }
     } catch (error) {
       console.error('Error fetching projects:', error);
-      // setProjects(MOCK_PROJECTS);
+      setProjects(MOCK_PROJECTS);
     } finally {
       setIsLoading(false);
     }

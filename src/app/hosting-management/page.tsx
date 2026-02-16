@@ -17,6 +17,7 @@ export default function HostingManagement() {
   const [serviceTypes, setServiceTypes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -155,6 +156,58 @@ export default function HostingManagement() {
     setProviderFilter('all');
     setServiceTypeFilter('all');
     setRenewalFilter('all');
+  };
+
+  const handleExport = async () => {
+    if (isExporting) return;
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        toast.error('You must be logged in to export hosting data');
+        return;
+      }
+
+      setIsExporting(true);
+
+      const params = new URLSearchParams();
+      if (searchTerm) params.append('search', searchTerm);
+      if (providerFilter && providerFilter !== 'all') params.append('provider', providerFilter);
+      if (serviceTypeFilter && serviceTypeFilter !== 'all') params.append('serviceType', serviceTypeFilter);
+      if (renewalFilter && renewalFilter !== 'all') params.append('status', renewalFilter);
+
+      const url = `${apiUrl}/api/hosting/export-excel${params.toString() ? `?${params.toString()}` : ''}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        toast.error('Failed to export hosting data');
+        return;
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = 'hosting.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+
+      toast.success('Hosting data exported successfully');
+    } catch (error) {
+      console.error('Error exporting hosting data:', error);
+      toast.error('An error occurred while exporting hosting data');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleSaveHosting = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -440,7 +493,12 @@ export default function HostingManagement() {
                 </svg>
                 Compare Vendors
               </button>
-              <button id="exportBtn" className="btn btn-outline text-sm h-9 px-4 flex items-center gap-2">
+              <button 
+                id="exportBtn" 
+                className="btn btn-outline text-sm h-9 px-4 flex items-center gap-2"
+                onClick={handleExport}
+                disabled={isExporting}
+              >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                 </svg>

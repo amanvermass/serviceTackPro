@@ -30,6 +30,7 @@ export default function DomainManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const itemsPerPage = 10;
+  const [isExporting, setIsExporting] = useState(false);
 
   // Selection State
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
@@ -96,6 +97,20 @@ export default function DomainManagement() {
           const clientId = clientObj ? clientObj._id : (typeof item.client === 'string' ? item.client : '');
           const clientContact = clientObj ? (clientObj.email || 'N/A') : 'N/A';
 
+          const registrarObj = item.registrar && typeof item.registrar === 'object' ? item.registrar : null;
+          let vendorName = 'N/A';
+          let vendorId = '';
+
+          if (registrarObj) {
+            vendorName = registrarObj.name;
+            vendorId = registrarObj._id;
+          } else if (typeof item.registrar === 'string') {
+            vendorId = item.registrar;
+            // Try to find name in vendors list
+            const foundVendor = vendors.find(v => v._id === vendorId);
+            vendorName = foundVendor ? foundVendor.name : vendorId;
+          }
+
           return {
             id: item._id,
             name: item.domainName,
@@ -105,7 +120,8 @@ export default function DomainManagement() {
             expiryDate: expiryDate.toISOString().split('T')[0],
             expiryStatus,
             daysRemaining,
-            vendor: item.registrar,
+            vendor: vendorName,
+            vendorId: vendorId,
             cost: item.cost || 0,
             status: item.status || 'active',
             autoRenew: item.autoRenew,
@@ -140,7 +156,7 @@ export default function DomainManagement() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, searchQuery, statusFilter, vendorFilter, sortConfig]);
+  }, [currentPage, searchQuery, statusFilter, vendorFilter, sortConfig, vendors]);
 
   const fetchClients = useCallback(async () => {
     try {
@@ -191,9 +207,8 @@ export default function DomainManagement() {
 
       if (response.ok) {
         const data = await response.json();
-        if (data.success && Array.isArray(data.data)) {
-          setVendors(data.data);
-        }
+        const items = Array.isArray(data) ? data : (data.data || []);
+        setVendors(items);
       }
     } catch (error) {
       console.error('Error fetching vendors:', error);
@@ -201,10 +216,13 @@ export default function DomainManagement() {
   }, []);
 
   useEffect(() => {
-    fetchDomains();
     fetchClients();
     fetchVendors();
-  }, [fetchDomains, fetchClients, fetchVendors]);
+  }, [fetchClients, fetchVendors]);
+
+  useEffect(() => {
+    fetchDomains();
+  }, [fetchDomains]);
 
   // Derived State: Filtered & Sorted Domains
   // Since we are doing server-side filtering, we might not need this complex logic anymore
@@ -277,9 +295,54 @@ export default function DomainManagement() {
     alert(`Processing bulk renewal for ${selectedDomains.size} domains`);
   };
 
-  const handleExport = () => {
-    console.log('Exporting domain data...');
-    alert('Exporting domain data...');
+  const handleExport = async () => {
+    if (isExporting) return;
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toastConfig.error('You must be logged in to export domains');
+        return;
+      }
+
+      setIsExporting(true);
+
+      const queryParams = new URLSearchParams();
+      if (searchQuery) queryParams.append('search', searchQuery);
+      if (statusFilter !== 'all') queryParams.append('status', statusFilter);
+      if (vendorFilter !== 'all') queryParams.append('registrar', vendorFilter);
+
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const url = `${baseUrl}/api/domains/export-excel${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'x-auth-token': token
+        }
+      });
+
+      if (!response.ok) {
+        toastConfig.error('Failed to export domains');
+        return;
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = 'domains.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+
+      toastConfig.success('Domains exported successfully');
+    } catch (error) {
+      console.error('Error exporting domains:', error);
+      toastConfig.error('An error occurred while exporting domains');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleAddClick = () => {
@@ -289,7 +352,17 @@ export default function DomainManagement() {
 
   const handleEditClick = (domain: Domain, e: React.MouseEvent) => {
     e.stopPropagation();
-    setEditingDomain(domain);
+    
+    // Resolve vendorId if it matches a name in the vendors list
+    let resolvedDomain = { ...domain };
+    if (vendors.length > 0) {
+       const matchedVendor = vendors.find(v => v.name === domain.vendor || v.name === domain.vendorId);
+       if (matchedVendor) {
+         resolvedDomain.vendorId = matchedVendor._id;
+       }
+    }
+
+    setEditingDomain(resolvedDomain);
     setIsAddDomainModalOpen(true);
   };
 
@@ -508,10 +581,11 @@ export default function DomainManagement() {
                 onChange={(e) => setVendorFilter(e.target.value)}
               >
                 <option value="all">All Vendors</option>
-                <option value="godaddy">GoDaddy</option>
-                <option value="namecheap">Namecheap</option>
-                <option value="cloudflare">Cloudflare</option>
-                <option value="google">Google Domains</option>
+                {vendors.map((vendor) => (
+                  <option key={vendor._id} value={vendor._id}>
+                    {vendor.name}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -900,11 +974,11 @@ export default function DomainManagement() {
                         name="vendor"
                         id="vendorSelect" 
                         className="input"
-                        defaultValue={editingDomain?.vendor || ''}
+                        defaultValue={editingDomain?.vendorId || ''}
                       >
                         <option value="" disabled>Select Vender</option>
                         {vendors.map((vendor) => (
-                          <option key={vendor._id} value={vendor.name}>{vendor.name}</option>
+                          <option key={vendor._id} value={vendor._id}>{vendor.name}</option>
                         ))}
                       </select>
                     </div>
