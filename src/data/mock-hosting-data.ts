@@ -2,6 +2,7 @@
 export interface HostingAccount {
   id: string;
   clientName: string;
+  clientId?: string;
   clientDomain?: string; // Kept for backward compatibility
   domain?: string; // New field from API
   clientInitials?: string;

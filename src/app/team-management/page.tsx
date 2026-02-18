@@ -124,14 +124,14 @@ export default function TeamManagement() {
 
   const fetchTeam = useCallback(async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
       const token = localStorage.getItem('token');
 
       if (!token) {
         return;
       }
 
-      const response = await fetch(`${apiUrl}/api/teams`, {
+      const response = await fetch(`${baseUrl}/api/teams`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -217,11 +217,9 @@ export default function TeamManagement() {
 
   const fetchRoles = useCallback(async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
       const token = localStorage.getItem('token');
-      const url = apiUrl ? `${apiUrl}/api/roles` : 'https://domainapi.kvtmedia.com/api/roles';
-
-      const response = await fetch(url, {
+      const response = await fetch(`${baseUrl}/api/roles`, {
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         }
@@ -336,12 +334,12 @@ export default function TeamManagement() {
     };
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
       const token = localStorage.getItem('token');
 
       const url = editingMember
-        ? `${apiUrl}/api/teams/${editingMember.id}`
-        : `${apiUrl}/api/teams`;
+        ? `${baseUrl}/api/teams/${editingMember.id}`
+        : `${baseUrl}/api/teams`;
 
       const method = editingMember ? 'PUT' : 'POST';
 
@@ -396,7 +394,7 @@ export default function TeamManagement() {
         </div>
 
         {/* Team Overview Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="card">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-lg bg-primary-100 flex items-center justify-center">
@@ -444,140 +442,8 @@ export default function TeamManagement() {
               </div>
             </div>
           </div>
-
-          <div className="card">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-lg bg-accent-100 flex items-center justify-center">
-                <svg className="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                </svg>
-              </div>
-              <div>
-                <p className="text-2xl font-heading font-bold text-text-primary">
-                  {teamStats
-                    ? Math.round(
-                        (teamStats.activeMembers / Math.max(teamStats.totalMembers || 1, 1)) * 100
-                      )
-                    : 0}
-                  %
-                </p>
-                <p className="text-sm text-text-secondary">Avg Capacity</p>
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* Workload Distribution Panel */}
-        <div className="card mb-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-heading font-semibold text-text-primary">Workload Distribution</h3>
-            <button className="btn btn-outline text-sm h-9 px-4 flex items-center">
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-              </svg>
-              Rebalance
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Team Member Workload */}
-            <div className="space-y-4">
-              <h4 className="font-medium text-text-primary mb-3">Current Workload</h4>
-              
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 rounded-lg bg-success-50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden">
-                       <img src="https://images.unsplash.com/photo-1584824486509-112e4181ff6b?q=80&w=2940&auto=format&fit=crop" alt="John Smith" className="w-full h-full object-cover" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-text-primary text-sm">John Smith</p>
-                      <p className="text-xs text-text-secondary">Account Manager</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-success">65%</p>
-                    <p className="text-xs text-text-secondary">3 projects</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-3 rounded-lg bg-warning-50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden">
-                       <img src="https://images.unsplash.com/photo-1584824486509-112e4181ff6b?q=80&w=2940&auto=format&fit=crop" alt="Lisa Anderson" className="w-full h-full object-cover" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-text-primary text-sm">Lisa Anderson</p>
-                      <p className="text-xs text-text-secondary">Technical Lead</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-warning">92%</p>
-                    <p className="text-xs text-text-secondary">5 projects</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-3 rounded-lg bg-primary-50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden">
-                       <img src="https://images.unsplash.com/photo-1584824486509-112e4181ff6b?q=80&w=2940&auto=format&fit=crop" alt="Mike Johnson" className="w-full h-full object-cover" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-text-primary text-sm">Mike Johnson</p>
-                      <p className="text-xs text-text-secondary">Developer</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-primary">75%</p>
-                    <p className="text-xs text-text-secondary">4 projects</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Capacity Recommendations */}
-            <div>
-              <h4 className="font-medium text-text-primary mb-3">Rebalancing Recommendations</h4>
-              <div className="space-y-3">
-                <div className="p-3 rounded-lg border border-warning-200 bg-warning-50">
-                  <div className="flex items-start gap-2">
-                    <svg className="w-4 h-4 text-warning mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
-                    </svg>
-                    <div>
-                      <p className="text-sm font-medium text-warning-700">High Workload Alert</p>
-                      <p className="text-xs text-warning-600 mt-1">Lisa Anderson is at 92% capacity. Consider redistributing 1-2 projects.</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-lg border border-success-200 bg-success-50">
-                  <div className="flex items-start gap-2">
-                    <svg className="w-4 h-4 text-success mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
-                    </svg>
-                    <div>
-                      <p className="text-sm font-medium text-success-700">Available Capacity</p>
-                      <p className="text-xs text-success-600 mt-1">John Smith has 35% available capacity for new assignments.</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-lg border border-primary-200 bg-primary-50">
-                  <div className="flex items-start gap-2">
-                    <svg className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd"/>
-                    </svg>
-                    <div>
-                      <p className="text-sm font-medium text-primary-700">Skill Match</p>
-                      <p className="text-xs text-primary-600 mt-1">Consider assigning React projects to Sarah Chen for optimal efficiency.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
         {/* Filters and Search Section */}
         <div className="card mb-6">
@@ -702,17 +568,6 @@ export default function TeamManagement() {
                       </svg>
                     </div>
                   </th>
-                  <th
-                    className="cursor-pointer hover:bg-secondary-100 transition-smooth"
-                    onClick={() => onSort('workload')}
-                  >
-                    <div className="flex items-center gap-2">
-                      Workload
-                      <svg className="w-4 h-4 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
-                      </svg>
-                    </div>
-                  </th>
                   <th>Contact & Notifications</th>
                   <th className="flex items-center justify-end">Actions</th>
                 </tr>
@@ -768,27 +623,6 @@ export default function TeamManagement() {
                         {m.projects.length === 2 && (
                           <p className="text-xs text-text-secondary">2 active projects</p>
                         )}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 bg-secondary-200 rounded-full h-2">
-                          <div
-                            className={[
-                              'h-2 rounded-full',
-                              m.workload >= 85 ? 'bg-warning' : m.workload >= 60 ? 'bg-primary' : 'bg-success'
-                            ].join(' ')}
-                            style={{ width: `${m.workload}%` }}
-                          />
-                        </div>
-                        <span
-                          className={[
-                            'text-sm font-medium',
-                            m.workload >= 85 ? 'text-warning' : m.workload >= 60 ? 'text-primary' : 'text-success'
-                          ].join(' ')}
-                        >
-                          {m.workload}%
-                        </span>
                       </div>
                     </td>
                     <td>
@@ -849,62 +683,6 @@ export default function TeamManagement() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-          <div className="card">
-            <h3 className="text-lg font-heading font-semibold text-text-primary">Organizational Structure</h3>
-            <div className="space-y-4 mt-4">
-              <div className="p-4 rounded-lg border border-primary-200 bg-primary-50">
-                <div className="flex items-center gap-3 mb-3">
-                  <img src={initialMembers[5].avatar} alt="David Wilson" className="w-10 h-10 rounded-full object-cover" />
-                  <div>
-                    <p className="font-medium text-text-primary">David Wilson</p>
-                    <p className="text-sm text-text-secondary">Project Director</p>
-                  </div>
-                </div>
-                <div className="ml-13">
-                  <p className="text-sm text-text-secondary mb-2">Direct Reports:</p>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-primary rounded-full"></div>
-                      <span className="text-sm text-text-primary">John Smith (Account Manager)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-primary rounded-full"></div>
-                      <span className="text-sm text-text-primary">Lisa Anderson (Technical Lead)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-primary rounded-full"></div>
-                      <span className="text-sm text-text-primary">Sarah Chen (UI/UX Designer)</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-lg border border-secondary-200 bg-secondary-50">
-                <div className="flex items-center gap-3 mb-3">
-                  <img src={initialMembers[1].avatar} alt="Lisa Anderson" className="w-10 h-10 rounded-full object-cover" />
-                  <div>
-                    <p className="font-medium text-text-primary">Lisa Anderson</p>
-                    <p className="text-sm text-text-secondary">Technical Lead</p>
-                  </div>
-                </div>
-                <div className="ml-13">
-                  <p className="text-sm text-text-secondary mb-2">Team Members:</p>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-secondary rounded-full"></div>
-                      <span className="text-sm text-text-primary">Mike Johnson (Developer)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-secondary rounded-full"></div>
-                      <span className="text-sm text-text-primary">Alex Rodriguez (Developer)</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
         <div
           id="memberDetailPanel"

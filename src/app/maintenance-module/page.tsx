@@ -113,6 +113,10 @@ export default function MaintenanceModule() {
   const [isLoading, setIsLoading] = useState(true);
   const [isStatsLoading, setIsStatsLoading] = useState(true);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
+  const [formStartDate, setFormStartDate] = useState('');
+  const [formEndDate, setFormEndDate] = useState('');
+  const [durationDays, setDurationDays] = useState('');
   
   const [filters, setFilters] = useState({
     search: '',
@@ -125,6 +129,42 @@ export default function MaintenanceModule() {
     key: 'client',
     direction: 'asc'
   });
+
+  const calculateMonthlyValue = (amcValue: number, frequency: string) => {
+    if (!amcValue || amcValue <= 0) return 0;
+    switch (frequency) {
+      case 'daily':
+        return amcValue * 30;
+      case 'weekly':
+        return (amcValue * 52) / 12;
+      case 'by-weekly':
+        return (amcValue * 26) / 12;
+      case 'quarterly':
+        return amcValue / 3;
+      case 'half-yearly':
+        return amcValue / 6;
+      case 'yearly':
+        return amcValue / 12;
+      default:
+        return amcValue;
+    }
+  };
+
+  const updateDuration = (start: string, end: string) => {
+    if (!start || !end) {
+      setDurationDays('');
+      return;
+    }
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    const diffMs = endDate.getTime() - startDate.getTime();
+    if (Number.isNaN(diffMs) || diffMs < 0) {
+      setDurationDays('');
+      return;
+    }
+    const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    setDurationDays(String(days));
+  };
 
   // Fetch Projects
   const fetchProjects = async () => {
@@ -361,6 +401,12 @@ export default function MaintenanceModule() {
 
   const handleEditClick = (project: Project) => {
     setEditingProject(project);
+    setSelectedTeamMembers(project.team || []);
+    const start = project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : '';
+    const end = project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : '';
+    setFormStartDate(start);
+    setFormEndDate(end);
+    updateDuration(start, end);
     setIsAddModalOpen(true);
   };
 
@@ -392,16 +438,12 @@ export default function MaintenanceModule() {
   const handleSaveProject = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    
-    // Collect team members
-    const selectedTeamMembers: string[] = [];
-    teamMembers.forEach((member) => {
-      if ((formData.get(`team_${member.id}`) as string) === 'on') {
-        selectedTeamMembers.push(member.id);
-      }
-    });
 
     const clientId = formData.get('clientName') as string;
+    const amcValueRaw = formData.get('amcValue') as string;
+    const billingFrequency = (formData.get('billingFrequency') as string) || 'monthly';
+    const amcValue = Number(amcValueRaw || 0);
+    const monthlyValue = calculateMonthlyValue(amcValue, billingFrequency);
     const rawStatus = (formData.get('status') as string) || 'active';
     const apiStatus = rawStatus === 'on-hold' ? 'onhold' : rawStatus;
 
@@ -414,8 +456,9 @@ export default function MaintenanceModule() {
         const updatePayload = {
           clientName: clientId,
           projectName: formData.get('projectName'),
-          monthlyValue: Number(formData.get('monthlyValue')),
-          status: apiStatus
+          monthlyValue,
+          status: apiStatus,
+          assignedMembers: selectedTeamMembers
         };
 
         response = await fetch(`${baseUrl}/api/maintenance/${editingProject.id}`, {
@@ -432,7 +475,7 @@ export default function MaintenanceModule() {
           projectName: formData.get('projectName'),
           amcStartDate: formData.get('startDate'),
           amcEndDate: formData.get('endDate'),
-          monthlyValue: Number(formData.get('monthlyValue')),
+          monthlyValue,
           freeChangesLimit: Number(formData.get('freeChangesTotal')),
           status: apiStatus,
           assignedMembers: selectedTeamMembers
@@ -477,17 +520,12 @@ export default function MaintenanceModule() {
             </div>
             <div className="flex items-center gap-3">
               <button 
-                onClick={() => setIsWorkloadPanelOpen(true)}
-                className="btn btn-outline flex items-center gap-2"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                </svg>
-                Team Workload
-              </button>
-              <button 
                 onClick={() => {
                   setEditingProject(null);
+                  setSelectedTeamMembers([]);
+                  setFormStartDate('');
+                  setFormEndDate('');
+                  setDurationDays('');
                   setIsAddModalOpen(true);
                 }}
                 className="btn btn-primary flex items-center gap-2"
@@ -980,7 +1018,12 @@ export default function MaintenanceModule() {
                     id="startDate" 
                     name="startDate"
                     className="input" 
-                    defaultValue={editingProject?.startDate ? new Date(editingProject.startDate).toISOString().split('T')[0] : ''}
+                    value={formStartDate}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFormStartDate(value);
+                      updateDuration(value, formEndDate);
+                    }}
                     required 
                   />
                 </div>
@@ -991,19 +1034,35 @@ export default function MaintenanceModule() {
                     id="endDate" 
                     name="endDate"
                     className="input" 
-                    defaultValue={editingProject?.endDate ? new Date(editingProject.endDate).toISOString().split('T')[0] : ''}
+                    value={formEndDate}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFormEndDate(value);
+                      updateDuration(formStartDate, value);
+                    }}
                     required 
+                  />
+                </div>
+                <div>
+                  <label htmlFor="duration" className="input-label">Duration (Days)</label>
+                  <input
+                    type="text"
+                    id="duration"
+                    name="duration"
+                    className="input"
+                    value={durationDays}
+                    readOnly
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="monthlyValue" className="input-label">Monthly Value</label>
+                  <label htmlFor="amcValue" className="input-label">AMC Value</label>
                   <input 
                     type="number" 
-                    id="monthlyValue" 
-                    name="monthlyValue"
+                    id="amcValue" 
+                    name="amcValue"
                     className="input" 
                     placeholder="e.g. 2500" 
                     min="0" 
@@ -1011,6 +1070,27 @@ export default function MaintenanceModule() {
                     required 
                   />
                 </div>
+                <div>
+                  <label htmlFor="billingFrequency" className="input-label">Billing Frequency</label>
+                  <select 
+                    id="billingFrequency" 
+                    name="billingFrequency"
+                    className="input"
+                    defaultValue="monthly"
+                    required
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="by-weekly">By-weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="quarterly">Quarterly</option>
+                    <option value="half-yearly">Half Yearly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="status" className="input-label">Status</label>
                   <select 
@@ -1026,9 +1106,6 @@ export default function MaintenanceModule() {
                     <option value="completed">Completed</option>
                   </select>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="freeChangesTotal" className="input-label">Free Changes Limit (Monthly)</label>
                   <input 
@@ -1058,25 +1135,15 @@ export default function MaintenanceModule() {
               </div>
 
               <div>
-                <label className="input-label">Assign Team Members</label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
-                  {teamMembers.map((member) => (
-                    <label
-                      key={member.id}
-                      className="flex items-center gap-2 p-2 border border-border rounded-lg hover:bg-surface-hover cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        name={`team_${member.id}`}
-                        className="w-4 h-4 border border-border accent-primary focus:ring-0"
-                        defaultChecked={editingProject?.team.includes(member.id)}
-                      />
-                      <span className="text-sm text-text-primary">
-                        {member.name}
-                      </span>
-                    </label>
-                  ))}
-                </div>
+                <MultiSelect
+                  label="Assign Team Members"
+                  options={teamMembers.map((member) => ({
+                    value: member.id,
+                    label: member.name
+                  }))}
+                  selected={selectedTeamMembers}
+                  onChange={setSelectedTeamMembers}
+                />
               </div>
 
 

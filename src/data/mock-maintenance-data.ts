@@ -20,6 +20,7 @@ export interface Project {
   startDate: string;
   endDate: string;
   monthlyValue: number;
+  purchasedBy?: string;
   freeChanges?: { used: number; total: number };
   paidChanges?: number;
   team: string[]; // IDs of assigned team members

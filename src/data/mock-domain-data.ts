@@ -30,6 +30,7 @@ export interface Domain {
   cost: number;
   status: 'expired' | 'expiring' | 'active' | 'renewed';
   autoRenew: boolean;
+  purchasedBy?: string;
   
   // Extended Details
   registrarInfo: {

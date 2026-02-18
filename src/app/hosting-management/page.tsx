@@ -4,20 +4,67 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Tooltip from '@/components/Tooltip';
-import { HostingAccount } from '@/data/mock-hosting-data';
 import { toast } from 'react-hot-toast';
 import TableShimmer from '@/components/TableShimmer';
+
+type HostingStatus = 'Active' | 'Expiring Soon' | 'Expired';
+
+interface HostingAccount {
+  id: string;
+  clientName: string;
+  client?: string;
+  clientDomain?: string;
+  domain?: string;
+  clientInitials?: string;
+  provider: any;
+  providerLogo?: string;
+  serviceType: any;
+  renewalDate: string;
+  daysLeft: number;
+  monthlyCost: number;
+  purchasedBy?: string;
+  loginUrl?: string;
+  password?: string;
+  bandwidthUsage: number;
+  bandwidthLabel: string;
+  diskUsage: number;
+  diskLabel: string;
+  status: HostingStatus;
+  serverInfo?: {
+    ipAddress?: string;
+    os?: string;
+    region?: string;
+    phpVersion?: string;
+    nodeVersion?: string;
+    dbType?: string;
+    uptime?: string;
+  };
+  features?: string[];
+  notes?: string;
+  recentActivity?: {
+    id: string;
+    action: string;
+    date: string;
+    user: string;
+    status: 'success' | 'warning' | 'error';
+  }[];
+}
 
 export default function HostingManagement() {
   const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<HostingAccount | null>(null);
   const [hostingAccounts, setHostingAccounts] = useState<HostingAccount[]>([]);
+  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
   const [providers, setProviders] = useState<any[]>([]);
   const [serviceTypes, setServiceTypes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 10;
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -30,13 +77,18 @@ export default function HostingManagement() {
   useEffect(() => {
     const fetchMetadata = async () => {
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL as string;
         const token = localStorage.getItem('token');
+        if (!token) {
+          setProviders([]);
+          setServiceTypes([]);
+          return;
+        }
         
         // Fetch providers
         try {
           const providersResponse = await fetch(`${apiUrl}/api/master/provider`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { Authorization: `Bearer ${token}` }
           });
           if (providersResponse.ok) {
             const providersData = await providersResponse.json();
@@ -50,7 +102,7 @@ export default function HostingManagement() {
         // Fetch service types
         try {
           const serviceTypesResponse = await fetch(`${apiUrl}/api/master/service-type`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { Authorization: `Bearer ${token}` }
           });
           if (serviceTypesResponse.ok) {
             const serviceTypesData = await serviceTypesResponse.json();
@@ -60,6 +112,7 @@ export default function HostingManagement() {
           console.error('Error fetching service types:', e);
           setServiceTypes([]);
         }
+
       } catch (error) {
         console.error('Error fetching metadata:', error);
       }
@@ -68,66 +121,140 @@ export default function HostingManagement() {
     fetchMetadata();
   }, []);
 
-  // Fetch hosting accounts when filters change
+  const fetchClients = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setClients([]);
+        return;
+      }
+
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
+      const response = await fetch(`${baseUrl}/api/clients?limit=100`, {
+        headers: {
+          'x-auth-token': token,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const items = Array.isArray(data) ? data : (data.data || []);
+        const mapped = items.map((item: any) => ({
+          id: item._id,
+          name: item.company || item.name
+        }));
+        setClients(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching clients:', error);
+      setClients([]);
+    }
+  };
+
   useEffect(() => {
-    const fetchHostingAccounts = async () => {
+    fetchClients();
+  }, []);
+
+  const fetchHostingAccounts = async (page = 1) => {
       setIsLoading(true);
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
         const token = localStorage.getItem('token');
+        if (!token) {
+          setIsLoading(false);
+          return;
+        }
         
         const params = new URLSearchParams();
+        params.append('page', page.toString());
+        params.append('limit', itemsPerPage.toString());
         if (searchTerm) params.append('search', searchTerm);
         if (providerFilter && providerFilter !== 'all') params.append('provider', providerFilter);
         if (serviceTypeFilter && serviceTypeFilter !== 'all') params.append('serviceType', serviceTypeFilter);
         if (renewalFilter && renewalFilter !== 'all') params.append('status', renewalFilter);
 
-        const response = await fetch(`${apiUrl}/api/hosting?${params.toString()}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
+        const response = await fetch(`${baseUrl}/api/hosting?${params.toString()}`, {
+          headers: {
+            'x-auth-token': token,
+            'Content-Type': 'application/json'
+          }
         });
         
         if (response.ok) {
            const data = await response.json();
-           // Map API data to HostingAccount interface
+           if (data.pagination) {
+             const pagination = data.pagination;
+             setTotalPages(
+               (pagination.totalPages ?? pagination.pages ?? 1) as number
+             );
+             if (typeof pagination.currentPage === 'number') {
+               setCurrentPage(pagination.currentPage);
+             }
+           }
            const items = Array.isArray(data) ? data : (data.data || []);
-           const mappedData = items.map((item: any) => ({
-             id: item._id,
-             clientName: item.clientName,
-             domain: item.domain,
-             clientDomain: item.domain, // Compatibility
-             clientInitials: item.clientName ? item.clientName.substring(0, 2).toUpperCase() : '??',
-             provider: item.provider,
-             serviceType: item.serviceType,
-             renewalDate: item.renewalDate,
-             monthlyCost: item.monthlyCost,
-             notes: item.notes,
-             // Computed/Default values for UI
-             daysLeft: Math.ceil((new Date(item.renewalDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
-             status: new Date(item.renewalDate) < new Date() ? 'Expired' : (new Date(item.renewalDate).getTime() - Date.now() < 30 * 24 * 60 * 60 * 1000 ? 'Expiring Soon' : 'Active'),
-             bandwidthUsage: 0,
-             bandwidthLabel: 'N/A',
-             diskUsage: 0,
-             diskLabel: 'N/A',
-             providerLogo: '',
-             serverInfo: {},
-             features: item.notes ? [item.notes] : [],
-             recentActivity: []
-           }));
+           const mappedData = items.map((item: any) => {
+             const clientObj = item.client && typeof item.client === 'object'
+               ? item.client
+               : item.clientName && typeof item.clientName === 'object'
+                 ? item.clientName
+                 : null;
+             const clientName = clientObj
+               ? (clientObj.company || clientObj.name || 'Unknown Client')
+               : (typeof item.clientName === 'string'
+                   ? item.clientName
+                   : (item.client || 'Unknown Client'));
+             const client = clientObj
+               ? (clientObj._id || '')
+               : (item.client || (typeof item.client === 'string' ? item.client : ''));
+
+             return {
+               id: item._id,
+               client,
+               clientName,
+               domain: item.domain,
+               clientDomain: item.domain,
+               clientInitials: clientName ? clientName.substring(0, 2).toUpperCase() : '??',
+               provider: item.provider,
+               serviceType: item.serviceType,
+               renewalDate: item.renewalDate,
+               monthlyCost: Number(item.monthlyCost ?? 0),
+               notes: item.notes,
+               purchasedBy: item.purchasedBy,
+               loginUrl: item.loginUrl,
+               password: item.password,
+               daysLeft: Math.ceil((new Date(item.renewalDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
+               status: new Date(item.renewalDate) < new Date()
+                 ? 'Expired'
+                 : (new Date(item.renewalDate).getTime() - Date.now() < 30 * 24 * 60 * 60 * 1000 ? 'Expiring Soon' : 'Active'),
+               bandwidthUsage: 0,
+               bandwidthLabel: 'N/A',
+               diskUsage: 0,
+               diskLabel: 'N/A',
+               providerLogo: '',
+               serverInfo: {},
+               features: item.notes ? [item.notes] : [],
+               recentActivity: []
+             };
+           });
            setHostingAccounts(mappedData);
+        } else if (response.status === 401) {
+          console.error('Unauthorized when fetching hosting accounts');
         }
       } catch (error) {
          console.error('Error fetching hosting accounts:', error);
       } finally {
         setIsLoading(false);
       }
-    };
+  };
 
+  // Fetch hosting accounts when filters or page change
+  useEffect(() => {
     const timeoutId = setTimeout(() => {
-      fetchHostingAccounts();
+      fetchHostingAccounts(currentPage);
     }, 500);
-
     return () => clearTimeout(timeoutId);
-  }, [searchTerm, providerFilter, serviceTypeFilter, renewalFilter]);
+  }, [searchTerm, providerFilter, serviceTypeFilter, renewalFilter, currentPage]);
 
 
   // Helper to safely get string value from potentially object fields
@@ -146,6 +273,38 @@ export default function HostingManagement() {
     setIsModalOpen(true);
   };
 
+  const handleDeleteClick = async (accountId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to delete this hosting account?')) return;
+
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('You must be logged in to delete hosting accounts');
+        return;
+      }
+
+      const response = await fetch(`${baseUrl}/api/hosting/${accountId}`, {
+        method: 'DELETE',
+        headers: {
+          'x-auth-token': token,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        toast.success('Hosting account deleted successfully');
+        setHostingAccounts(prev => prev.filter(acc => acc.id !== accountId));
+      } else {
+        toast.error('Failed to delete hosting account');
+      }
+    } catch (error) {
+      console.error('Error deleting hosting account:', error);
+      toast.error('Error deleting hosting account');
+    }
+  };
+
   const handleCloseModal = () => {
     setEditingAccount(null);
     setIsModalOpen(false);
@@ -156,12 +315,13 @@ export default function HostingManagement() {
     setProviderFilter('all');
     setServiceTypeFilter('all');
     setRenewalFilter('all');
+    setCurrentPage(1);
   };
 
   const handleExport = async () => {
     if (isExporting) return;
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
       const token = localStorage.getItem('token');
 
       if (!token) {
@@ -177,12 +337,12 @@ export default function HostingManagement() {
       if (serviceTypeFilter && serviceTypeFilter !== 'all') params.append('serviceType', serviceTypeFilter);
       if (renewalFilter && renewalFilter !== 'all') params.append('status', renewalFilter);
 
-      const url = `${apiUrl}/api/hosting/export-excel${params.toString() ? `?${params.toString()}` : ''}`;
+      const url = `${baseUrl}/api/hosting/export-excel${params.toString() ? `?${params.toString()}` : ''}`;
 
       const response = await fetch(url, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'x-auth-token': token
         }
       });
 
@@ -215,42 +375,42 @@ export default function HostingManagement() {
     setIsSubmitting(true);
     
     const formData = new FormData(e.currentTarget);
+    const selectedclient = formData.get('clientName') as string;
     const data = {
-      clientName: formData.get('clientName') as string,
+      client: selectedclient,
       domain: formData.get('domain') as string,
-      provider: formData.get('provider') as string, // Should be ID
-      serviceType: formData.get('serviceType') as string, // Should be ID
+      provider: formData.get('provider') as string,
+      serviceType: formData.get('serviceType') as string,
       renewalDate: formData.get('renewalDate') as string,
       monthlyCost: Number(formData.get('monthlyCost')),
       notes: formData.get('notes') as string,
+      purchasedBy: formData.get('purchasedBy') as string,
+      loginUrl: formData.get('loginUrl') as string,
+      password: formData.get('password') as string,
     };
 
     try {
-       const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
        const token = localStorage.getItem('token');
-       
-       let response;
-       if (editingAccount) {
-         // PUT Request
-         response = await fetch(`${apiUrl}/api/hosting/${editingAccount.id}`, {
-           method: 'PUT',
-           headers: {
-             'Content-Type': 'application/json',
-             'Authorization': `Bearer ${token}`
-           },
-           body: JSON.stringify(data)
-         });
-       } else {
-         // POST Request
-         response = await fetch(`${apiUrl}/api/hosting`, {
-           method: 'POST',
-           headers: {
-             'Content-Type': 'application/json',
-             'Authorization': `Bearer ${token}`
-           },
-           body: JSON.stringify(data)
-         });
+       if (!token) {
+         toast.error('You must be logged in to manage hosting accounts');
+         setIsSubmitting(false);
+         return;
        }
+
+       const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
+       const url = editingAccount
+         ? `${baseUrl}/api/hosting/${editingAccount.id}`
+         : `${baseUrl}/api/hosting`;
+       const method = editingAccount ? 'PUT' : 'POST';
+
+       const response = await fetch(url, {
+         method,
+         headers: {
+           'Content-Type': 'application/json',
+           'x-auth-token': token
+         },
+         body: JSON.stringify(data)
+       });
 
        if (response.ok) {
          // Refresh list
@@ -259,30 +419,47 @@ export default function HostingManagement() {
          // For now, let's just reload page or refetch. Since we have useEffect dependent on filters, 
          // we can just re-trigger it? Or just manually update state.
          
-         const savedAccount = await response.json();
-         // Map the saved account
-         const mappedSavedAccount = {
-             id: savedAccount._id,
-             clientName: savedAccount.clientName,
-             domain: savedAccount.domain,
-             clientDomain: savedAccount.domain,
-             clientInitials: savedAccount.clientName ? savedAccount.clientName.substring(0, 2).toUpperCase() : '??',
-             provider: savedAccount.provider, // Might be ID or Object depending on backend response
-             serviceType: savedAccount.serviceType,
-             renewalDate: savedAccount.renewalDate,
-             monthlyCost: savedAccount.monthlyCost,
-             notes: savedAccount.notes,
-             daysLeft: Math.ceil((new Date(savedAccount.renewalDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
-             status: new Date(savedAccount.renewalDate) < new Date() ? 'Expired' : (new Date(savedAccount.renewalDate).getTime() - Date.now() < 30 * 24 * 60 * 60 * 1000 ? 'Expiring Soon' : 'Active') as any,
-             bandwidthUsage: 0,
-             bandwidthLabel: 'N/A',
-             diskUsage: 0,
-             diskLabel: 'N/A',
-             providerLogo: '',
-             serverInfo: {},
-             features: savedAccount.notes ? [savedAccount.notes] : [],
-             recentActivity: []
-         };
+        const savedAccount = await response.json();
+        const clientObj = savedAccount.client && typeof savedAccount.client === 'object'
+          ? savedAccount.client
+          : savedAccount.clientName && typeof savedAccount.clientName === 'object'
+            ? savedAccount.clientName
+            : null;
+        const clientName = clientObj
+          ? (clientObj.company || clientObj.name || 'Unknown Client')
+          : (savedAccount.clientName || savedAccount.client || 'Unknown Client');
+        const client = clientObj
+          ? (clientObj._id || '')
+          : (savedAccount.client || (typeof savedAccount.client === 'string' ? savedAccount.client : ''));
+
+        const mappedSavedAccount = {
+            id: savedAccount._id,
+            client,
+            clientName,
+            domain: savedAccount.domain,
+            clientDomain: savedAccount.domain,
+            clientInitials: clientName ? clientName.substring(0, 2).toUpperCase() : '??',
+            provider: savedAccount.provider,
+            serviceType: savedAccount.serviceType,
+            renewalDate: savedAccount.renewalDate,
+            monthlyCost: Number(savedAccount.monthlyCost ?? 0),
+            notes: savedAccount.notes,
+            purchasedBy: savedAccount.purchasedBy,
+            loginUrl: savedAccount.loginUrl,
+            password: savedAccount.password,
+            daysLeft: Math.ceil((new Date(savedAccount.renewalDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
+            status: new Date(savedAccount.renewalDate) < new Date()
+              ? 'Expired'
+              : (new Date(savedAccount.renewalDate).getTime() - Date.now() < 30 * 24 * 60 * 60 * 1000 ? 'Expiring Soon' : 'Active') as any,
+            bandwidthUsage: 0,
+            bandwidthLabel: 'N/A',
+            diskUsage: 0,
+            diskLabel: 'N/A',
+            providerLogo: '',
+            serverInfo: {},
+            features: savedAccount.notes ? [savedAccount.notes] : [],
+            recentActivity: []
+        };
 
          if (editingAccount) {
             setHostingAccounts(prev => prev.map(a => a.id === mappedSavedAccount.id ? mappedSavedAccount : a));
@@ -341,7 +518,7 @@ export default function HostingManagement() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {/* Total Hosting Accounts */}
           <div className="card hover-lift p-5">
             <div className="flex items-start justify-between mb-4">
@@ -383,25 +560,11 @@ export default function HostingManagement() {
               <span className="text-xs text-success font-medium">+12%</span>
             </div>
             <h3 className="text-2xl font-heading font-bold text-text-primary mb-1">
-              ${hostingAccounts.reduce((sum, acc) => sum + acc.monthlyCost, 0).toLocaleString()}
+              ${hostingAccounts
+                .reduce((sum, acc) => sum + (acc.monthlyCost ?? 0), 0)
+                .toLocaleString()}
             </h3>
             <p className="text-sm text-text-secondary">Monthly Cost</p>
-          </div>
-
-          {/* Bandwidth Usage */}
-          <div className="card hover-lift p-5">
-            <div className="flex items-start justify-between mb-4">
-              <div className="w-12 h-12 rounded-lg bg-accent-100 flex items-center justify-center">
-                <svg className="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                </svg>
-              </div>
-              <span className="text-xs text-text-secondary">Avg</span>
-            </div>
-            <h3 className="text-2xl font-heading font-bold text-text-primary mb-1">
-              {hostingAccounts.length > 0 ? Math.round(hostingAccounts.reduce((sum, acc) => sum + acc.bandwidthUsage, 0) / hostingAccounts.length) : 0}%
-            </h3>
-            <p className="text-sm text-text-secondary">Avg Bandwidth Usage</p>
           </div>
         </div>
 
@@ -419,7 +582,10 @@ export default function HostingManagement() {
                     className="input pl-10 w-full" 
                     placeholder="Search by client, provider, or service..." 
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setCurrentPage(1);
+                    }}
                   />
                   <svg className="w-5 h-5 text-text-tertiary absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -435,7 +601,10 @@ export default function HostingManagement() {
                 id="providerFilter" 
                 className="input w-full"
                 value={providerFilter}
-                onChange={(e) => setProviderFilter(e.target.value)}
+                onChange={(e) => {
+                  setProviderFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
               >
                 <option value="all">All Providers</option>
                 {Array.isArray(providers) && providers.map(p => {
@@ -453,7 +622,10 @@ export default function HostingManagement() {
                 id="serviceTypeFilter" 
                 className="input w-full"
                 value={serviceTypeFilter}
-                onChange={(e) => setServiceTypeFilter(e.target.value)}
+                onChange={(e) => {
+                  setServiceTypeFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
               >
                 <option value="all">All Types</option>
                 {Array.isArray(serviceTypes) && serviceTypes.map(s => {
@@ -471,7 +643,7 @@ export default function HostingManagement() {
                 id="renewalFilter" 
                 className="input w-full"
                 value={renewalFilter}
-                onChange={(e) => setRenewalFilter(e.target.value)}
+                onChange={(e) => { setRenewalFilter(e.target.value); setCurrentPage(1); }}
               >
                 <option value="all">All Status</option>
                 <option value="expiring">Expiring Soon</option>
@@ -567,7 +739,7 @@ export default function HostingManagement() {
                       </svg>
                     </div>
                   </th>
-                  <th>Bandwidth</th>
+                  <th>Purchase By</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -608,21 +780,14 @@ export default function HostingManagement() {
                         </p>
                       </td>
                       <td className="font-medium text-text-primary">
-                        ${account.monthlyCost.toFixed(2)}
+                        ${((account.monthlyCost ?? 0)).toFixed(2)}
                       </td>
-                      <td>
-                        <div className="w-full max-w-[120px]">
-                          <div className="flex justify-between text-xs mb-1">
-                            <span className="text-text-secondary">{account.bandwidthUsage}%</span>
-                          </div>
-                          <div className="w-full bg-secondary-100 rounded-full h-1.5">
-                            <div 
-                              className={`h-1.5 rounded-full ${account.bandwidthUsage > 80 ? 'bg-warning' : 'bg-primary'}`} 
-                              style={{ width: `${account.bandwidthUsage}%` }}
-                            ></div>
-                          </div>
-                          <p className="text-[10px] text-text-tertiary mt-1 truncate">{account.bandwidthLabel}</p>
-                        </div>
+                      <td className="text-sm text-text-secondary">
+                        {account.purchasedBy === 'kvtmedia'
+                          ? 'KVT Media'
+                          : account.purchasedBy === 'client'
+                            ? 'Client'
+                            : ''}
                       </td>
                       <td>
                         <span className={`badge ${
@@ -634,19 +799,22 @@ export default function HostingManagement() {
                       </td>
                       <td>
                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                          <button className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary transition-smooth" title="View Details" onClick={() => handleRowClick(account)}>
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          <button 
+                            className="p-2 rounded-lg hover:bg-surface-hover transition-smooth" 
+                            aria-label="Edit hosting"
+                            onClick={() => handleEditClick(account)}
+                          >
+                            <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
                           </button>
                           <button 
-                            className="p-2 rounded-lg hover:bg-surface-hover text-text-secondary transition-smooth" 
-                            title="Edit"
-                            onClick={() => handleEditClick(account)}
+                            className="p-2 rounded-lg hover:bg-error-50 transition-smooth" 
+                            aria-label="Delete hosting"
+                            onClick={(e) => handleDeleteClick(account.id, e)}
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            <svg className="w-5 h-5 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
                           </button>
                         </div>
@@ -656,6 +824,63 @@ export default function HostingManagement() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Pagination */}
+          <div className="px-6 py-4 border-t border-border flex flex-col sm:flex-row items-center justify-center gap-4 bg-surface-50">
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="btn btn-outline btn-sm h-8 px-3"
+              >
+                Previous
+              </button>
+              
+              <div className="flex items-center gap-1">
+                {(() => {
+                  const pages: (number | string)[] = [];
+                  if (totalPages <= 3) {
+                    for (let i = 1; i <= totalPages; i++) pages.push(i);
+                  } else {
+                    let start = Math.max(1, currentPage - 1);
+                    let end = Math.min(totalPages, start + 2);
+                    
+                    if (end === totalPages) {
+                      start = Math.max(1, end - 2);
+                    }
+
+                    if (start > 1) pages.push('...');
+                    for (let i = start; i <= end; i++) pages.push(i);
+                    if (end < totalPages) pages.push('...');
+                  }
+                  
+                  return pages.map((page, index) => (
+                    <button
+                      key={index}
+                      onClick={() => typeof page === 'number' ? setCurrentPage(page) : null}
+                      disabled={typeof page !== 'number'}
+                      className={`h-8 min-w-[32px] px-2 rounded-lg text-sm font-medium transition-colors
+                        ${page === currentPage 
+                          ? 'bg-primary text-white shadow-sm' 
+                          : typeof page === 'number' 
+                            ? 'hover:bg-surface-hover text-text-secondary hover:text-text-primary' 
+                            : 'text-text-tertiary cursor-default'}`}
+                    >
+                      {page}
+                    </button>
+                  ));
+                })()}
+              </div>
+
+              <button 
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="btn btn-outline btn-sm h-8 px-3"
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
         {/* Modal */}
@@ -683,15 +908,27 @@ export default function HostingManagement() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="clientName" className="input-label">Client Name</label>
-                    <input 
-                      type="text" 
+                    <select 
                       id="clientName" 
                       name="clientName" 
                       className="input" 
-                      placeholder="e.g. TechCorp Solutions" 
-                      defaultValue={editingAccount?.clientName}
-                      required 
-                    />
+                      defaultValue={
+                        editingAccount?.client ||
+                        (editingAccount?.clientName
+                          ? clients.find(c => c.name === editingAccount.clientName)?.id || ''
+                          : '')
+                      }
+                      required
+                    >
+                      <option value="" disabled>
+                        Select client
+                      </option>
+                      {clients.map((client) => (
+                        <option key={client.id} value={client.id}>
+                          {client.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label htmlFor="domain" className="input-label">Domain</label>
@@ -769,6 +1006,67 @@ export default function HostingManagement() {
                       defaultValue={editingAccount?.monthlyCost}
                       required 
                     />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="purchasedBy" className="input-label">Purchased By</label>
+                  <select
+                    id="purchasedBy"
+                    name="purchasedBy"
+                    className="input"
+                    defaultValue={editingAccount?.purchasedBy || ''}
+                    required
+                  >
+                    <option value="" disabled>
+                      Select option
+                    </option>
+                    <option value="kvtmedia">KVT Media</option>
+                    <option value="client">Client</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="loginUrl" className="input-label">Login URL</label>
+                    <input
+                      type="url"
+                      id="loginUrl"
+                      name="loginUrl"
+                      className="input"
+                      placeholder="https://controlpanel.example.com"
+                      defaultValue={editingAccount?.loginUrl || ''}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="password" className="input-label">Password</label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        id="password"
+                        name="password"
+                        className="input pr-10"
+                        placeholder="••••••••"
+                        defaultValue={editingAccount?.password || ''}
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 px-3 flex items-center text-text-secondary"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a10.45 10.45 0 012.352-3.952M9.88 9.88A3 3 0 0114.12 14.12M6.1 6.1L4 4m2.1 2.1l3.12 3.12m3.76 3.76L18 18m-2.12-2.12l3.02 3.02M9.88 9.88l4.24 4.24" />
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
 

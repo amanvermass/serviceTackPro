@@ -125,6 +125,7 @@ export default function DomainManagement() {
             cost: item.cost || 0,
             status: item.status || 'active',
             autoRenew: item.autoRenew,
+            purchasedBy: item.purchasedBy,
             registrarInfo: {
               name: item.registrar,
               url: '',
@@ -402,6 +403,7 @@ export default function DomainManagement() {
     const expiryDate = (form.elements.namedItem('expiryDate') as HTMLInputElement).value;
     const cost = (form.elements.namedItem('cost') as HTMLInputElement).value;
     const autoRenew = (form.elements.namedItem('autoRenew') as HTMLInputElement).checked;
+    const purchasedBy = (form.elements.namedItem('purchasedBy') as HTMLSelectElement | null)?.value || '';
 
     try {
       const token = localStorage.getItem('token');
@@ -430,7 +432,8 @@ export default function DomainManagement() {
           autoRenew,
           status: 'active', // Default status
           registrationDate: editingDomain ? undefined : new Date().toISOString(), // Only send on create
-          clientId: client
+          clientId: client,
+          purchasedBy
         })
       });
 
@@ -740,6 +743,7 @@ export default function DomainManagement() {
                       </svg>
                     </div>
                   </th>
+                  <th>Purchased By</th>
                   <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" onClick={() => handleSort('cost')}>
                     <div className="flex items-center gap-2">
                       Cost
@@ -811,6 +815,15 @@ export default function DomainManagement() {
                     <td>
                       <span className={`badge ${getStatusBadgeClass(domain.status)}`}>
                         {domain.status.charAt(0).toUpperCase() + domain.status.slice(1)}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="text-sm text-text-secondary">
+                        {domain.purchasedBy === 'kvtmedia'
+                          ? 'KVT Media'
+                          : domain.purchasedBy === 'client'
+                            ? 'Client'
+                            : ''}
                       </span>
                     </td>
                     <td>
@@ -1007,18 +1020,32 @@ export default function DomainManagement() {
                         defaultValue={editingDomain?.cost || ''}
                       />
                     </div>
-                    <div className="flex items-center pt-8">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          id="autoRenew"
-                          name="autoRenew"
-                          className="w-4 h-4 rounded border-border text-primary focus:ring-primary" 
-                          defaultChecked={editingDomain?.autoRenew || false}
-                        />
-                        <span className="text-text-primary">Auto-renew enabled</span>
-                      </label>
+                    <div>
+                      <label htmlFor="purchasedBy" className="input-label">Purchased By</label>
+                      <select
+                        id="purchasedBy"
+                        name="purchasedBy"
+                        className="input"
+                        defaultValue={(editingDomain as any)?.purchasedBy || ''}
+                      >
+                        <option value="">Select option</option>
+                        <option value="kvtmedia">KVT Media</option>
+                        <option value="client">Client</option>
+                      </select>
                     </div>
+                  </div>
+
+                  <div className="flex items-center pt-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        id="autoRenew"
+                        name="autoRenew"
+                        className="w-4 h-4 rounded border-border text-primary focus:ring-primary" 
+                        defaultChecked={editingDomain?.autoRenew || false}
+                      />
+                      <span className="text-text-primary">Auto-renew enabled</span>
+                    </label>
                   </div>
                 </form>
               </div>
