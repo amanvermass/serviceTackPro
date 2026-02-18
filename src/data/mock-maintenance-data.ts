@@ -23,6 +23,8 @@ export interface Project {
   freeChanges?: { used: number; total: number };
   paidChanges?: number;
   team: string[]; // IDs of assigned team members
+  roleId?: string;
+  roleName?: string;
   status: 'active' | 'pending' | 'completed' | 'on-hold';
   notes?: string;
   recentChanges?: { title: string; desc: string; date: string; type: 'free' | 'paid'; cost?: number; author: string }[];

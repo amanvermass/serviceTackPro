@@ -1,15 +1,16 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 
 export default function TeamManagement() {
   interface TeamMember {
-    id: number;
+    id: string;
     name: string;
     email: string;
     role: string;
+    roleId?: string;
     status: 'available' | 'busy' | 'offline';
     phone: string;
     projects: string[];
@@ -21,7 +22,7 @@ export default function TeamManagement() {
 
   const initialMembers: TeamMember[] = [
     {
-      id: 1,
+      id: '1',
       name: 'John Smith',
       email: 'john.smith@company.com',
       role: 'Account Manager',
@@ -34,7 +35,7 @@ export default function TeamManagement() {
       avatar: 'https://images.unsplash.com/photo-1584824486509-112e4181ff6b?q=80&w=2940&auto=format&fit=crop'
     },
     {
-      id: 2,
+      id: '2',
       name: 'Lisa Anderson',
       email: 'lisa.anderson@company.com',
       role: 'Technical Lead',
@@ -47,7 +48,7 @@ export default function TeamManagement() {
       avatar: 'https://images.unsplash.com/photo-1584824486509-112e4181ff6b?q=80&w=2940&auto=format&fit=crop'
     },
     {
-      id: 3,
+      id: '3',
       name: 'Mike Johnson',
       email: 'mike.johnson@company.com',
       role: 'Developer',
@@ -60,7 +61,7 @@ export default function TeamManagement() {
       avatar: 'https://images.unsplash.com/photo-1584824486509-112e4181ff6b?q=80&w=2940&auto=format&fit=crop'
     },
     {
-      id: 4,
+      id: '4',
       name: 'Sarah Chen',
       email: 'sarah.chen@company.com',
       role: 'UI/UX Designer',
@@ -73,7 +74,7 @@ export default function TeamManagement() {
       avatar: 'https://images.unsplash.com/photo-1584824486509-112e4181ff6b?q=80&w=2940&auto=format&fit=crop'
     },
     {
-      id: 5,
+      id: '5',
       name: 'Alex Rodriguez',
       email: 'alex.rodriguez@company.com',
       role: 'Developer',
@@ -86,7 +87,7 @@ export default function TeamManagement() {
       avatar: 'https://images.unsplash.com/photo-1584824486509-112e4181ff6b?q=80&w=2940&auto=format&fit=crop'
     },
     {
-      id: 6,
+      id: '6',
       name: 'David Wilson',
       email: 'david.wilson@company.com',
       role: 'Project Director',
@@ -101,6 +102,7 @@ export default function TeamManagement() {
   ];
 
   const [members, setMembers] = useState<TeamMember[]>(initialMembers);
+  const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -109,12 +111,145 @@ export default function TeamManagement() {
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [newMember, setNewMember] = useState<{ name: string; email: string; phone: string; role: string }>({
     name: '',
     email: '',
     phone: '',
     role: ''
   });
+
+  const [teamStats, setTeamStats] = useState<{ totalMembers: number; activeMembers: number; activeProjects: number } | null>(null);
+  const [isStatsLoading, setIsStatsLoading] = useState(true);
+
+  const fetchTeam = useCallback(async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        return;
+      }
+
+      const response = await fetch(`${apiUrl}/api/teams`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const items = Array.isArray(data) ? data : (data.data || []);
+
+        const apiMembers: TeamMember[] = items.map((item: any) => {
+          const notifications: string[] = [];
+          if (item.notifications?.email) notifications.push('Email');
+          if (item.notifications?.sms) notifications.push('SMS');
+          if (item.notifications?.whatsapp) notifications.push('WhatsApp');
+
+          const permissions: string[] = [];
+          if (item.role?.permissions) {
+            Object.entries(item.role.permissions).forEach(([key, value]) => {
+              if (value) {
+                const label = key.charAt(0).toUpperCase() + key.slice(1);
+                permissions.push(label);
+              }
+            });
+          }
+
+          return {
+            id: item._id,
+            name: item.name,
+            email: item.email,
+            role: item.role?.name || 'Team Member',
+            roleId: item.role?._id,
+            status: item.status === 'active' ? 'available' : 'offline',
+            phone: item.phone || '',
+            projects: [],
+            workload: 0,
+            permissions,
+            notifications,
+            avatar: ''
+          };
+        });
+
+        if (apiMembers.length > 0) {
+          setMembers(apiMembers);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching team members:', error);
+    }
+  }, []);
+
+  const fetchTeamStats = useCallback(async () => {
+    try {
+      setIsStatsLoading(true);
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        setIsStatsLoading(false);
+        return;
+      }
+
+      const response = await fetch(`${baseUrl}/api/teams/team-stats`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const statsData = data.data || data;
+        setTeamStats({
+          totalMembers: statsData.totalMembers ?? 0,
+          activeMembers: statsData.activeMembers ?? 0,
+          activeProjects: statsData.activeProjects ?? 0
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching team stats:', error);
+    } finally {
+      setIsStatsLoading(false);
+    }
+  }, []);
+
+  const fetchRoles = useCallback(async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      const token = localStorage.getItem('token');
+      const url = apiUrl ? `${apiUrl}/api/roles` : 'https://domainapi.kvtmedia.com/api/roles';
+
+      const response = await fetch(url, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const items = Array.isArray(data) ? data : (data.data || []);
+        const mappedRoles = items
+          .map((item: any) => ({
+            id: item._id || item.id,
+            name: item.name
+          }))
+          .filter((role: { id: string; name: string }) => role.id && role.name);
+        setRoles(mappedRoles);
+      } else {
+        console.error('Failed to fetch roles');
+      }
+    } catch (error) {
+      console.error('Error fetching roles:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTeam();
+    fetchRoles();
+    fetchTeamStats();
+  }, [fetchTeam, fetchRoles, fetchTeamStats]);
 
   const filtered = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -172,25 +307,64 @@ export default function TeamManagement() {
     setPanelOpen(true);
   };
 
-  const addMemberSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const addMemberSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!newMember.name || !newMember.email || !newMember.role) return;
-    const id = members.length ? Math.max(...members.map((m) => m.id)) + 1 : 1;
-    const created: TeamMember = {
-      id,
-      name: newMember.name,
-      email: newMember.email,
-      role: newMember.role,
-      status: 'available',
-      phone: newMember.phone || '',
-      projects: [],
-      workload: 0,
-      permissions: [],
-      notifications: ['Email']
+
+    const formData = new FormData(e.currentTarget);
+    const name = (formData.get('memberName') as string) || '';
+    const email = (formData.get('memberEmail') as string) || '';
+    const phone = (formData.get('memberPhone') as string) || '';
+    const roleValue = (formData.get('memberRole') as string) || '';
+
+    if (!name || !email || !roleValue) return;
+
+    const notifEmail = formData.get('notif_email') === 'on';
+    const notifSms = formData.get('notif_sms') === 'on';
+    const notifWhatsapp = formData.get('notif_whatsapp') === 'on';
+
+    const payload = {
+      name,
+      email,
+      password: editingMember ? '12345678' : '123456',
+      phone,
+      roleId: roleValue,
+      notifications: {
+        email: notifEmail || (!notifSms && !notifWhatsapp),
+        sms: notifSms,
+        whatsapp: notifWhatsapp
+      }
     };
-    setMembers((prev) => [...prev, created]);
-    setAddOpen(false);
-    setNewMember({ name: '', email: '', phone: '', role: '' });
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const token = localStorage.getItem('token');
+
+      const url = editingMember
+        ? `${apiUrl}/api/teams/${editingMember.id}`
+        : `${apiUrl}/api/teams`;
+
+      const method = editingMember ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        await fetchTeam();
+        setAddOpen(false);
+        setEditingMember(null);
+        setNewMember({ name: '', email: '', phone: '', role: '' });
+      } else {
+        console.error('Failed to save team member');
+      }
+    } catch (error) {
+      console.error('Error saving team member:', error);
+    }
   };
 
   return (
@@ -207,7 +381,11 @@ export default function TeamManagement() {
             <button
               id="addTeamMemberBtn"
               className="btn btn-primary flex items-center gap-2 w-full sm:w-auto"
-              onClick={() => setAddOpen(true)}
+              onClick={() => {
+                setEditingMember(null);
+                setNewMember({ name: '', email: '', phone: '', role: '' });
+                setAddOpen(true);
+              }}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/>
@@ -227,7 +405,9 @@ export default function TeamManagement() {
                 </svg>
               </div>
               <div>
-                <p className="text-2xl font-heading font-bold text-text-primary">8</p>
+                <p className="text-2xl font-heading font-bold text-text-primary">
+                  {teamStats?.totalMembers ?? 0}
+                </p>
                 <p className="text-sm text-text-secondary">Total Members</p>
               </div>
             </div>
@@ -241,7 +421,9 @@ export default function TeamManagement() {
                 </svg>
               </div>
               <div>
-                <p className="text-2xl font-heading font-bold text-text-primary">6</p>
+                <p className="text-2xl font-heading font-bold text-text-primary">
+                  {teamStats?.activeMembers ?? 0}
+                </p>
                 <p className="text-sm text-text-secondary">Active Members</p>
               </div>
             </div>
@@ -255,7 +437,9 @@ export default function TeamManagement() {
                 </svg>
               </div>
               <div>
-                <p className="text-2xl font-heading font-bold text-text-primary">15</p>
+                <p className="text-2xl font-heading font-bold text-text-primary">
+                  {teamStats?.activeProjects ?? 0}
+                </p>
                 <p className="text-sm text-text-secondary">Active Projects</p>
               </div>
             </div>
@@ -269,7 +453,14 @@ export default function TeamManagement() {
                 </svg>
               </div>
               <div>
-                <p className="text-2xl font-heading font-bold text-text-primary">78%</p>
+                <p className="text-2xl font-heading font-bold text-text-primary">
+                  {teamStats
+                    ? Math.round(
+                        (teamStats.activeMembers / Math.max(teamStats.totalMembers || 1, 1)) * 100
+                      )
+                    : 0}
+                  %
+                </p>
                 <p className="text-sm text-text-secondary">Avg Capacity</p>
               </div>
             </div>
@@ -618,16 +809,35 @@ export default function TeamManagement() {
                         </div>
                       </div>
                     </td>
-                    <td>
-                      <div className="flex items-center justify-end gap-2">
-                        <button className="p-2 rounded-lg hover:bg-surface-hover transition-smooth" aria-label="Edit team member">
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className="p-2 rounded-lg hover:bg-surface-hover transition-smooth"
+                          aria-label="Edit team member"
+                          onClick={() => {
+                            setEditingMember(m);
+                            setNewMember({
+                              name: m.name,
+                              email: m.email,
+                              phone: m.phone,
+                              role: m.roleId || m.role
+                            });
+                            setAddOpen(true);
+                          }}
+                        >
                           <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                           </svg>
                         </button>
-                        <button className="p-2 rounded-lg hover:bg-primary-50 transition-smooth" aria-label="Assign project">
-                          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        <button
+                          className="p-2 rounded-lg hover:bg-error-50 transition-smooth"
+                          aria-label="Delete team member"
+                          onClick={() => {
+                            setMembers((prev) => prev.filter((x) => x.id !== m.id));
+                          }}
+                        >
+                          <svg className="w-5 h-5 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                           </svg>
                         </button>
                       </div>
@@ -843,8 +1053,19 @@ export default function TeamManagement() {
             <div className="modal-content">
               <div className="p-6 border-b border-border">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-heading font-bold text-text-primary">Add Team Member</h3>
-                  <button id="closeModalBtn" className="p-2 rounded-lg hover:bg-surface-hover transition-smooth" aria-label="Close modal" onClick={() => setAddOpen(false)}>
+                  <h3 className="text-xl font-heading font-bold text-text-primary">
+                    {editingMember ? 'Edit Team Member' : 'Add Team Member'}
+                  </h3>
+                  <button
+                    id="closeModalBtn"
+                    className="p-2 rounded-lg hover:bg-surface-hover transition-smooth"
+                    aria-label="Close modal"
+                    onClick={() => {
+                      setAddOpen(false);
+                      setEditingMember(null);
+                      setNewMember({ name: '', email: '', phone: '', role: '' });
+                    }}
+                  >
                     <svg className="w-6 h-6 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
@@ -858,6 +1079,7 @@ export default function TeamManagement() {
                     <input
                       type="text"
                       id="memberName"
+                      name="memberName"
                       className="input"
                       placeholder="Enter full name"
                       value={newMember.name}
@@ -870,6 +1092,7 @@ export default function TeamManagement() {
                     <input
                       type="email"
                       id="memberEmail"
+                      name="memberEmail"
                       className="input"
                       placeholder="member@company.com"
                       value={newMember.email}
@@ -885,6 +1108,7 @@ export default function TeamManagement() {
                     <input
                       type="tel"
                       id="memberPhone"
+                      name="memberPhone"
                       className="input"
                       placeholder="+1 (555) 123-4567"
                       value={newMember.phone}
@@ -895,16 +1119,18 @@ export default function TeamManagement() {
                     <label htmlFor="memberRole" className="input-label">Role *</label>
                     <select
                       id="memberRole"
+                      name="memberRole"
                       className="input"
                       value={newMember.role}
                       onChange={(e) => setNewMember((s) => ({ ...s, role: e.target.value }))}
                       required
                     >
                       <option value="">Select role</option>
-                      <option value="Manager">Manager</option>
-                      <option value="Developer">Developer</option>
-                      <option value="Designer">Designer</option>
-                      <option value="Support">Support</option>
+                      {roles.map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {role.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -914,7 +1140,11 @@ export default function TeamManagement() {
                   <div className="grid grid-cols-2 gap-3 mt-2">
                     {['Clients', 'Domains', 'Hosting', 'Maintenance', 'Team', 'Settings'].map((perm) => (
                       <label key={perm} className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4 rounded border-border text-primary focus:ring-primary" />
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                          defaultChecked={editingMember?.permissions.includes(perm) ?? false}
+                        />
                         <span className="text-sm text-text-primary">{perm}</span>
                       </label>
                     ))}
@@ -924,12 +1154,21 @@ export default function TeamManagement() {
                 <div>
                   <label className="input-label">Notification Preferences</label>
                   <div className="flex flex-wrap gap-3 mt-2">
-                    {['Email', 'SMS', 'WhatsApp'].map((ch) => (
-                      <label key={ch} className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4 rounded border-border text-primary focus:ring-primary" defaultChecked={ch === 'Email'} />
-                        <span className="text-sm text-text-primary">{ch}</span>
-                      </label>
-                    ))}
+                    {['Email', 'SMS', 'WhatsApp'].map((ch) => {
+                      const name =
+                        ch === 'Email' ? 'notif_email' : ch === 'SMS' ? 'notif_sms' : 'notif_whatsapp';
+                      return (
+                        <label key={ch} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            name={name}
+                            className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                            defaultChecked={ch === 'Email'}
+                          />
+                          <span className="text-sm text-text-primary">{ch}</span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -938,9 +1177,20 @@ export default function TeamManagement() {
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/>
                     </svg>
-                    Add Member
+                    {editingMember ? 'Save Changes' : 'Add Member'}
                   </button>
-                  <button type="button" id="cancelModalBtn" className="btn btn-outline" onClick={() => setAddOpen(false)}>Cancel</button>
+                  <button
+                    type="button"
+                    id="cancelModalBtn"
+                    className="btn btn-outline"
+                    onClick={() => {
+                      setAddOpen(false);
+                      setEditingMember(null);
+                      setNewMember({ name: '', email: '', phone: '', role: '' });
+                    }}
+                  >
+                    Cancel
+                  </button>
                 </div>
               </form>
             </div>

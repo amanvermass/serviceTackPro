@@ -4,7 +4,8 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { MOCK_TEAM, MOCK_PROJECTS, Project, TeamMember } from '@/data/mock-maintenance-data';
+import { Project } from '@/data/mock-maintenance-data';
+import TableShimmer from '@/components/TableShimmer';
 import { toast } from 'react-hot-toast';
 
 // Helper Component: MultiSelect
@@ -107,7 +108,10 @@ export default function MaintenanceModule() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isWorkloadPanelOpen, setIsWorkloadPanelOpen] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
+  const [teamMembers, setTeamMembers] = useState<{ id: string; name: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isStatsLoading, setIsStatsLoading] = useState(true);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   
   const [filters, setFilters] = useState({
@@ -126,16 +130,22 @@ export default function MaintenanceModule() {
   const fetchProjects = async () => {
     setIsLoading(true);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
       const token = localStorage.getItem('token');
 
-      if (!token) {
-        setProjects(MOCK_PROJECTS);
-        return;
+      const params = new URLSearchParams();
+      if (filters.search.trim()) {
+        params.append('search', filters.search.trim());
       }
+      if (filters.status.length === 1) {
+        const statusValue = filters.status[0] === 'on-hold' ? 'onhold' : filters.status[0];
+        params.append('status', statusValue);
+      }
+
+      const url = `${baseUrl}/api/maintenance${params.toString() ? `?${params.toString()}` : ''}`;
       
-      const response = await fetch(`${apiUrl}/api/maintenance`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const response = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
       
       if (response.ok) {
@@ -144,35 +154,125 @@ export default function MaintenanceModule() {
 
         const mappedData: Project[] = items.map((item: any) => ({
           id: item._id,
-          client: item.client || item.clientName || 'Unknown Client',
-          clientId: item.clientId,
-          name: item.name || item.projectName,
-          type: item.type || 'website',
-          startDate: item.startDate,
-          endDate: item.endDate,
-          monthlyValue: item.monthlyValue || 0,
-          freeChanges: item.freeChanges || { used: 0, total: 5 },
-          paidChanges: item.paidChanges || 0,
-          team: item.team || [],
-          status: item.status || 'active',
-          notes: item.notes || '',
-          recentChanges: item.recentChanges || []
+          client: item.clientName?.name || item.client || 'Unknown Client',
+          clientId: item.clientName?._id,
+          name: item.projectName || item.name || 'Maintenance Project',
+          type: 'website',
+          startDate: item.amcStartDate || item.startDate,
+          endDate: item.amcEndDate || item.endDate,
+          monthlyValue: item.monthlyValue ?? 0,
+          freeChanges: { used: 0, total: item.freeChangesLimit ?? 0 },
+          paidChanges: 0,
+          team: Array.isArray(item.assignedMembers) ? item.assignedMembers.map((m: any) => m._id) : [],
+          status: item.status === 'onhold' ? 'on-hold' : (item.status || 'active'),
+          notes: '',
+          recentChanges: []
         }));
-        setProjects(mappedData.length > 0 ? mappedData : MOCK_PROJECTS);
+        setProjects(mappedData);
       } else {
         console.error('Failed to fetch projects');
-        setProjects(MOCK_PROJECTS);
+        setProjects([]);
       }
     } catch (error) {
       console.error('Error fetching projects:', error);
-      setProjects(MOCK_PROJECTS);
+      setProjects([]);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const fetchStats = async () => {
+    setIsStatsLoading(true);
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(`${baseUrl}/api/maintenance/maintenance-stats`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const statsData = data.data || data;
+        setStatsFromApi({
+          activeProjects: statsData.activeProjects ?? 0,
+          teamMembers: statsData.teamMembers ?? 0
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching maintenance stats:', error);
+    } finally {
+      setIsStatsLoading(false);
+    }
+  };
+
+  const fetchTeamMembers = async () => {
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(`${baseUrl}/api/teams`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const items = Array.isArray(data) ? data : (data.data || []);
+        const mapped = items.map((item: any) => ({
+          id: item._id,
+          name: item.name
+        }));
+        setTeamMembers(mapped);
+      } else {
+        setTeamMembers([]);
+      }
+    } catch (error) {
+      console.error('Error fetching team members:', error);
+      setTeamMembers([]);
+    }
+  };
+
+  const fetchClients = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
+      const response = await fetch(`${baseUrl}/api/clients?limit=100`, {
+        headers: {
+          'x-auth-token': token,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const items = Array.isArray(data) ? data : (data.data || []);
+        const mapped = items.map((item: any) => ({
+          id: item._id,
+          name: item.company || item.name
+        }));
+        setClients(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching clients:', error);
+    }
+  };
+
   useEffect(() => {
     fetchProjects();
+  }, [filters.search, filters.status]);
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  useEffect(() => {
+    fetchTeamMembers();
+  }, []);
+
+  useEffect(() => {
+    fetchClients();
   }, []);
 
   // Derived Data
@@ -181,7 +281,10 @@ export default function MaintenanceModule() {
       const matchesSearch = 
         project.client.toLowerCase().includes(filters.search.toLowerCase()) ||
         project.name.toLowerCase().includes(filters.search.toLowerCase()) ||
-        project.team.some(memberId => MOCK_TEAM.find(m => m.id === memberId)?.name.toLowerCase().includes(filters.search.toLowerCase()));
+        project.team.some(memberId => {
+          const member = teamMembers.find(m => m.id === memberId);
+          return member ? member.name.toLowerCase().includes(filters.search.toLowerCase()) : false;
+        });
 
       const matchesClient = filters.client === 'all' || project.clientId === filters.client || project.client === filters.client; // Relaxed check
       const matchesTeam = filters.team.length === 0 || project.team.some(memberId => filters.team.includes(memberId));
@@ -190,6 +293,8 @@ export default function MaintenanceModule() {
       return matchesSearch && matchesClient && matchesTeam && matchesStatus;
     });
   }, [filters, projects]);
+
+  const [statsFromApi, setStatsFromApi] = useState<{ activeProjects: number; teamMembers: number } | null>(null);
 
   const sortedProjects = useMemo(() => {
     return [...filteredProjects].sort((a, b) => {
@@ -211,13 +316,20 @@ export default function MaintenanceModule() {
   }, [filteredProjects, sortConfig]);
 
   const stats = useMemo(() => {
+    const activeComputed = projects.filter(p => p.status === 'active').length;
+    const completedChangesComputed = projects.reduce(
+      (acc, p) => acc + (p.paidChanges || 0) + (p.recentChanges?.length || 0),
+      0
+    );
+    const teamMembersComputed = teamMembers.length;
+
     return {
-      active: projects.filter(p => p.status === 'active').length,
+      active: statsFromApi?.activeProjects ?? activeComputed,
       pending: projects.filter(p => p.status === 'pending').length,
-      completedChanges: projects.reduce((acc, p) => acc + (p.paidChanges || 0) + (p.recentChanges?.length || 0), 0),
-      teamMembers: MOCK_TEAM.length // Still using mock team count
+      completedChanges: completedChangesComputed,
+      teamMembers: statsFromApi?.teamMembers ?? teamMembersComputed
     };
-  }, [projects]);
+  }, [projects, statsFromApi, teamMembers]);
 
   // Handlers
   const handleSort = (key: keyof Project | 'amc' | 'changes') => {
@@ -228,7 +340,7 @@ export default function MaintenanceModule() {
   };
 
   const getTeamMembers = (memberIds: string[]) => {
-    return memberIds.map(id => MOCK_TEAM.find(m => m.id === id)).filter(Boolean) as TeamMember[];
+    return memberIds.map(id => teamMembers.find(m => m.id === id)).filter(Boolean) as { id: string; name: string }[];
   };
 
   const getRemainingMonths = (endDate: string) => {
@@ -252,54 +364,87 @@ export default function MaintenanceModule() {
     setIsAddModalOpen(true);
   };
 
+  const handleDeleteProject = async (projectId: string) => {
+    const confirmDelete = window.confirm('Are you sure you want to delete this maintenance project?');
+    if (!confirmDelete) return;
+
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(`${baseUrl}/api/maintenance/${projectId}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+
+      if (response.ok) {
+        toast.success('Project deleted successfully');
+        fetchProjects();
+      } else {
+        toast.error('Failed to delete project');
+      }
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      toast.error('Error connecting to server');
+    }
+  };
+
   const handleSaveProject = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
     // Collect team members
-    const teamMembers: string[] = [];
-    MOCK_TEAM.forEach(member => {
-        if ((formData.get(`team_${member.id}`) as string) === 'on') {
-            teamMembers.push(member.id);
-        }
+    const selectedTeamMembers: string[] = [];
+    teamMembers.forEach((member) => {
+      if ((formData.get(`team_${member.id}`) as string) === 'on') {
+        selectedTeamMembers.push(member.id);
+      }
     });
 
-    const data = {
-      client: formData.get('clientName'),
-      name: formData.get('projectName'),
-      startDate: formData.get('startDate'),
-      endDate: formData.get('endDate'),
-      monthlyValue: Number(formData.get('monthlyValue')),
-      freeChanges: {
-        total: Number(formData.get('freeChangesTotal')),
-        used: Number(formData.get('freeChangesUsed') || 0)
-      },
-      status: formData.get('status'),
-      team: teamMembers
-    };
+    const clientId = formData.get('clientName') as string;
+    const rawStatus = (formData.get('status') as string) || 'active';
+    const apiStatus = rawStatus === 'on-hold' ? 'onhold' : rawStatus;
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
       const token = localStorage.getItem('token');
       
       let response;
       if (editingProject) {
-        response = await fetch(`${apiUrl}/api/maintenance/${editingProject.id}`, {
+        const updatePayload = {
+          clientName: clientId,
+          projectName: formData.get('projectName'),
+          monthlyValue: Number(formData.get('monthlyValue')),
+          status: apiStatus
+        };
+
+        response = await fetch(`${baseUrl}/api/maintenance/${editingProject.id}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
           },
-          body: JSON.stringify(data)
+          body: JSON.stringify(updatePayload)
         });
       } else {
-        response = await fetch(`${apiUrl}/api/maintenance`, {
+        const createPayload = {
+          clientName: clientId,
+          projectName: formData.get('projectName'),
+          amcStartDate: formData.get('startDate'),
+          amcEndDate: formData.get('endDate'),
+          monthlyValue: Number(formData.get('monthlyValue')),
+          freeChangesLimit: Number(formData.get('freeChangesTotal')),
+          status: apiStatus,
+          assignedMembers: selectedTeamMembers
+        };
+
+        response = await fetch(`${baseUrl}/api/maintenance`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
           },
-          body: JSON.stringify(data)
+          body: JSON.stringify(createPayload)
         });
       }
 
@@ -357,63 +502,79 @@ export default function MaintenanceModule() {
         </div>
 
         {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="card">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-lg bg-primary-100 flex items-center justify-center flex-shrink-0">
-                <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
+        {isStatsLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="card">
+                <div className="flex items-center gap-4 animate-pulse">
+                  <div className="w-12 h-12 rounded-lg bg-secondary-100 flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-5 bg-secondary-100 rounded w-16" />
+                    <div className="h-3 bg-secondary-100 rounded w-24" />
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-heading font-bold text-text-primary">{stats.active}</p>
-                <p className="text-sm text-text-secondary">Active Projects</p>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="card">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-lg bg-primary-100 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-2xl font-heading font-bold text-text-primary">{stats.active}</p>
+                  <p className="text-sm text-text-secondary">Active Projects</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="card">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-lg bg-warning-100 flex items-center justify-center flex-shrink-0">
-                <svg className="w-6 h-6 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-              </div>
-              <div>
-                <p className="text-2xl font-heading font-bold text-text-primary">{stats.pending}</p>
-                <p className="text-sm text-text-secondary">Pending Changes</p>
+            <div className="card">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-lg bg-warning-100 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-6 h-6 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-2xl font-heading font-bold text-text-primary">{stats.pending}</p>
+                  <p className="text-sm text-text-secondary">Pending Changes</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="card">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-lg bg-success-100 flex items-center justify-center flex-shrink-0">
-                <svg className="w-6 h-6 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-              </div>
-              <div>
-                <p className="text-2xl font-heading font-bold text-text-primary">{stats.completedChanges}</p>
-                <p className="text-sm text-text-secondary">Completed Changes</p>
+            <div className="card">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-lg bg-success-100 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-6 h-6 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-2xl font-heading font-bold text-text-primary">{stats.completedChanges}</p>
+                  <p className="text-sm text-text-secondary">Completed Changes</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="card">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-lg bg-accent-100 flex items-center justify-center flex-shrink-0">
-                <svg className="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-                </svg>
-              </div>
-              <div>
-                <p className="text-2xl font-heading font-bold text-text-primary">{stats.teamMembers}</p>
-                <p className="text-sm text-text-secondary">Team Members</p>
+            <div className="card">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-lg bg-accent-100 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-2xl font-heading font-bold text-text-primary">{stats.teamMembers}</p>
+                  <p className="text-sm text-text-secondary">Team Members</p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Filters Section */}
         <div className="card mb-6">
@@ -446,10 +607,15 @@ export default function MaintenanceModule() {
                 onChange={(e) => setFilters(prev => ({ ...prev, client: e.target.value }))}
               >
                 <option value="all">All Clients</option>
-                <option value="techcorp">TechCorp Solutions</option>
-                <option value="digital">Digital Innovations</option>
-                <option value="greenstart">GreenStart Ventures</option>
-                <option value="bluesky">BlueSky Consulting</option>
+                {Array.from(
+                  new Map(
+                    projects.map((p) => [p.clientId || p.client, p.client])
+                  ).entries()
+                ).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -457,7 +623,7 @@ export default function MaintenanceModule() {
             <div>
               <MultiSelect
                 label="Team Member"
-                options={MOCK_TEAM.map(m => ({ value: m.id, label: m.name }))}
+                options={teamMembers.map((m) => ({ value: m.id, label: m.name }))}
                 selected={filters.team}
                 onChange={(value) => setFilters(prev => ({ ...prev, team: value }))}
               />
@@ -504,42 +670,90 @@ export default function MaintenanceModule() {
         {/* Projects Table */}
         <div className="card overflow-hidden">
           {isLoading ? (
-            <div className="p-8 text-center text-text-secondary">Loading projects...</div>
+            <div className="overflow-x-auto">
+              <table className="table">
+                <tbody>
+                  <TableShimmer columns={6} rows={8} />
+                </tbody>
+              </table>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="table">
                 <thead>
                   <tr>
-                    <th 
+                    <th
                       className="cursor-pointer hover:bg-secondary-100 transition-smooth"
                       onClick={() => handleSort('client')}
                     >
                       <div className="flex items-center gap-2">
                         Client & Project
-                        <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.key === 'client' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                        <svg
+                          className={`w-4 h-4 text-text-tertiary transition-transform ${
+                            sortConfig.key === 'client' && sortConfig.direction === 'desc'
+                              ? 'rotate-180'
+                              : ''
+                          }`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
+                          />
                         </svg>
                       </div>
                     </th>
-                    <th 
+                    <th
                       className="cursor-pointer hover:bg-secondary-100 transition-smooth"
                       onClick={() => handleSort('amc')}
                     >
                       <div className="flex items-center gap-2">
                         AMC Period
-                        <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.key === 'amc' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                        <svg
+                          className={`w-4 h-4 text-text-tertiary transition-transform ${
+                            sortConfig.key === 'amc' && sortConfig.direction === 'desc'
+                              ? 'rotate-180'
+                              : ''
+                          }`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
+                          />
                         </svg>
                       </div>
                     </th>
-                    <th 
+                    <th
                       className="cursor-pointer hover:bg-secondary-100 transition-smooth"
                       onClick={() => handleSort('changes')}
                     >
                       <div className="flex items-center gap-2">
                         Change Counter
-                        <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.key === 'changes' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                        <svg
+                          className={`w-4 h-4 text-text-tertiary transition-transform ${
+                            sortConfig.key === 'changes' && sortConfig.direction === 'desc'
+                              ? 'rotate-180'
+                              : ''
+                          }`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
+                          />
                         </svg>
                       </div>
                     </th>
@@ -549,8 +763,8 @@ export default function MaintenanceModule() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedProjects.map(project => (
-                    <tr 
+                  {sortedProjects.map((project) => (
+                    <tr
                       key={project.id}
                       className="cursor-pointer hover:bg-surface-hover transition-smooth"
                       onClick={(e) => {
@@ -561,14 +775,23 @@ export default function MaintenanceModule() {
                     >
                       <td>
                         <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                            project.clientId === 'techcorp' ? 'bg-primary-100 text-primary-700' :
-                            project.clientId === 'digital' ? 'bg-accent-100 text-accent-700' :
-                            project.clientId === 'greenstart' ? 'bg-success-100 text-success-700' :
-                            'bg-secondary-100 text-secondary-700'
-                          }`}>
+                          <div
+                            className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                              project.clientId === 'techcorp'
+                                ? 'bg-primary-100 text-primary-700'
+                                : project.clientId === 'digital'
+                                ? 'bg-accent-100 text-accent-700'
+                                : project.clientId === 'greenstart'
+                                ? 'bg-success-100 text-success-700'
+                                : 'bg-secondary-100 text-secondary-700'
+                            }`}
+                          >
                             <span className="font-semibold text-sm">
-                              {project.client.split(' ').map(n => n[0]).join('').substring(0, 2)}
+                              {project.client
+                                .split(' ')
+                                .map((n) => n[0])
+                                .join('')
+                                .substring(0, 2)}
                             </span>
                           </div>
                           <div>
@@ -579,78 +802,105 @@ export default function MaintenanceModule() {
                       </td>
                       <td>
                         <div>
-                          <p className="font-medium text-text-primary">{formatDate(project.startDate)} - {formatDate(project.endDate)}</p>
-                          <p className="text-xs text-text-secondary">{getRemainingMonths(project.endDate)} months remaining</p>
+                          <p className="font-medium text-text-primary">
+                            {formatDate(project.startDate)} - {formatDate(project.endDate)}
+                          </p>
+                          <p className="text-xs text-text-secondary">
+                            {getRemainingMonths(project.endDate)} months remaining
+                          </p>
                         </div>
                       </td>
                       <td>
                         <div className="flex items-center gap-2">
                           <div className="flex items-center gap-1">
-                            <span className={`badge ${(project.freeChanges?.used || 0) >= (project.freeChanges?.total || 0) ? 'badge-error' : 'badge-success'}`}>
+                            <span
+                              className={`badge ${
+                                (project.freeChanges?.used || 0) >= (project.freeChanges?.total || 0)
+                                  ? 'badge-error'
+                                  : 'badge-success'
+                              }`}
+                            >
                               Free: {project.freeChanges?.used || 0}/{project.freeChanges?.total || 0}
                             </span>
-                            <span className={`badge ${(project.paidChanges || 0) > 0 ? 'badge-warning' : 'badge-primary'}`}>
+                            <span
+                              className={`badge ${
+                                (project.paidChanges || 0) > 0 ? 'badge-warning' : 'badge-primary'
+                              }`}
+                            >
                               Paid: {project.paidChanges || 0}
                             </span>
                           </div>
                         </div>
                       </td>
                       <td>
-                        <div className="flex items-center gap-2">
-                          {getTeamMembers(project.team).slice(0, 2).map((member, i) => (
-                            <img 
+                        <div className="flex flex-wrap gap-1">
+                          {getTeamMembers(project.team).map((member) => (
+                            <span
                               key={member.id}
-                              src={member.avatar}
-                              alt={member.name}
-                              className={`w-8 h-8 rounded-full object-cover ${i > 0 ? '-ml-2' : ''}`}
-                              onError={(e) => {e.currentTarget.src='https://images.unsplash.com/photo-1584824486509-112e4181ff6b?q=80&w=2940&auto=format&fit=crop';}}
-                            />
+                              className="px-2 py-0.5 rounded-full bg-secondary-100 text-xs text-text-primary"
+                            >
+                              {member.name}
+                            </span>
                           ))}
-                          {project.team.length > 2 && (
-                            <span className="text-xs text-text-secondary ml-1">+{project.team.length - 2}</span>
-                          )}
                         </div>
                       </td>
                       <td>
-                        <span className={`badge ${
-                          project.status === 'active' ? 'badge-success' :
-                          project.status === 'pending' ? 'badge-warning' :
-                          project.status === 'on-hold' ? 'badge-primary' :
-                          'badge-secondary'
-                        }`}>
-                          {project.status.charAt(0).toUpperCase() + project.status.slice(1).replace('-', ' ')}
+                        <span
+                          className={`badge ${
+                            project.status === 'active'
+                              ? 'badge-success'
+                              : project.status === 'pending'
+                              ? 'badge-warning'
+                              : project.status === 'on-hold'
+                              ? 'badge-primary'
+                              : 'badge-secondary'
+                          }`}
+                        >
+                          {project.status.charAt(0).toUpperCase() +
+                            project.status.slice(1).replace('-', ' ')}
                         </span>
                       </td>
                       <td>
-                        <div className="flex items-center justify-end gap-2">
-                          <button 
-                            className="p-2 rounded-lg hover:bg-surface-hover transition-smooth" 
-                            aria-label="View project details"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigateToDetails(project.id);
-                            }}
-                          >
-                            <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                            </svg>
-                          </button>
-                          <button 
-                            className="p-2 rounded-lg hover:bg-surface-hover transition-smooth" 
+                        <div
+                          className="flex items-center justify-end gap-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            className="p-2 rounded-lg hover:bg-surface-hover transition-smooth"
                             aria-label="Edit project"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditClick(project);
-                            }}
+                            onClick={() => handleEditClick(project)}
                           >
-                            <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                            <svg
+                              className="w-5 h-5 text-text-secondary"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                              />
                             </svg>
                           </button>
-                          <button className="p-2 rounded-lg hover:bg-primary-50 transition-smooth" aria-label="Add change request">
-                            <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/>
+                          <button
+                            className="p-2 rounded-lg hover:bg-error-50 transition-smooth"
+                            aria-label="Delete project"
+                            onClick={() => handleDeleteProject(project.id)}
+                          >
+                            <svg
+                              className="w-5 h-5 text-error"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              />
                             </svg>
                           </button>
                         </div>
@@ -690,16 +940,23 @@ export default function MaintenanceModule() {
             <form className="p-6 space-y-6" onSubmit={handleSaveProject}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="clientName" className="input-label">Client Name</label>
-                  <input 
-                    type="text" 
-                    id="clientName" 
+                  <label htmlFor="clientName" className="input-label">Client</label>
+                  <select
+                    id="clientName"
                     name="clientName"
-                    className="input" 
-                    placeholder="e.g. TechCorp Solutions" 
-                    defaultValue={editingProject?.client || ''}
-                    required 
-                  />
+                    className="input"
+                    defaultValue={editingProject?.clientId || ''}
+                    required
+                  >
+                    <option value="" disabled>
+                      Select client
+                    </option>
+                    {clients.map((client) => (
+                      <option key={client.id} value={client.id}>
+                        {client.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label htmlFor="projectName" className="input-label">Project Name</label>
@@ -803,19 +1060,25 @@ export default function MaintenanceModule() {
               <div>
                 <label className="input-label">Assign Team Members</label>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
-                  {MOCK_TEAM.map(member => (
-                    <label key={member.id} className="flex items-center gap-2 p-2 border border-border rounded-lg hover:bg-surface-hover cursor-pointer">
-                      <input 
-                        type="checkbox" 
+                  {teamMembers.map((member) => (
+                    <label
+                      key={member.id}
+                      className="flex items-center gap-2 p-2 border border-border rounded-lg hover:bg-surface-hover cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
                         name={`team_${member.id}`}
-                        className="rounded border-border text-primary focus:ring-primary" 
+                        className="w-4 h-4 border border-border accent-primary focus:ring-0"
                         defaultChecked={editingProject?.team.includes(member.id)}
                       />
-                      <span className="text-sm text-text-primary">{member.name}</span>
+                      <span className="text-sm text-text-primary">
+                        {member.name}
+                      </span>
                     </label>
                   ))}
                 </div>
               </div>
+
 
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
                 <button 
