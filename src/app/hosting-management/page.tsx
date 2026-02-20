@@ -74,6 +74,8 @@ export default function HostingManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const itemsPerPage = 10;
+  const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
+  const [renewAccount, setRenewAccount] = useState<HostingAccount | null>(null);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -321,6 +323,12 @@ export default function HostingManagement() {
     setIsModalOpen(true);
   };
 
+  const handleOpenRenewModal = (account: HostingAccount, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRenewAccount(account);
+    setIsRenewModalOpen(true);
+  };
+
   const handleDeleteClick = async (accountId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm('Are you sure you want to delete this hosting account?')) return;
@@ -415,6 +423,55 @@ export default function HostingManagement() {
       toast.error('An error occurred while exporting hosting data');
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleRenewHosting = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!renewAccount) return;
+
+    const form = e.target as HTMLFormElement;
+    const renewalDate = (form.elements.namedItem('renewalDate') as HTMLInputElement).value;
+    const monthlyCost = (form.elements.namedItem('monthlyCost') as HTMLInputElement).value;
+    const remark = (form.elements.namedItem('renewalRemark') as HTMLTextAreaElement | null)?.value || '';
+
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('You must be logged in to renew hosting');
+        return;
+      }
+
+      const url = `${baseUrl}/api/hosting/${renewAccount.id}/renew`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token
+        },
+        body: JSON.stringify({
+          renewalDate,
+          monthlyCost: parseFloat(monthlyCost) || 0,
+          remark
+        })
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (response.ok) {
+        toast.success('Hosting renewed successfully');
+        setIsRenewModalOpen(false);
+        setRenewAccount(null);
+        fetchHostingAccounts(currentPage);
+      } else {
+        const message = data && (data.message || data.msg);
+        toast.error(message || 'Failed to renew hosting');
+      }
+    } catch (error) {
+      console.error('Error renewing hosting:', error);
+      toast.error('An error occurred while renewing hosting');
     }
   };
 
@@ -987,6 +1044,15 @@ export default function HostingManagement() {
                       </td>
                       <td>
                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            className="p-2 rounded-lg hover:bg-surface-hover transition-smooth"
+                            aria-label="Renew hosting"
+                            onClick={(e) => handleOpenRenewModal(account, e)}
+                          >
+                            <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          </button>
                           <button 
                             className="p-2 rounded-lg hover:bg-surface-hover transition-smooth" 
                             aria-label="Edit hosting"
@@ -1212,6 +1278,103 @@ export default function HostingManagement() {
             </div>
           </div>
         )}
+
+        {isRenewModalOpen && renewAccount && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-surface w-full max-w-md rounded-2xl shadow-2xl border border-border flex flex-col max-h-[90vh]">
+              <div className="flex items-center justify-between p-6 border-b border-border">
+                <h3 className="text-xl font-heading font-bold text-text-primary">
+                  Renew Hosting
+                </h3>
+                <button
+                  onClick={() => {
+                    setIsRenewModalOpen(false);
+                    setRenewAccount(null);
+                  }}
+                  className="text-text-tertiary hover:text-text-primary transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto">
+                <form id="renewHostingForm" className="space-y-4" onSubmit={handleRenewHosting}>
+                  <div>
+                    <p className="text-sm text-text-secondary">
+                      Client
+                    </p>
+                    <p className="text-base font-medium text-text-primary">
+                      {renewAccount.clientName}
+                    </p>
+                    <p className="text-xs text-text-secondary">
+                      {renewAccount.domain || renewAccount.clientDomain}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="renewalDate" className="input-label">Renewal Date</label>
+                    <input
+                      type="date"
+                      id="renewalDate"
+                      name="renewalDate"
+                      className="input"
+                      defaultValue={renewAccount.renewalDate}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="monthlyCost" className="input-label">Monthly Cost ($)</label>
+                    <input
+                      type="number"
+                      id="monthlyCost"
+                      name="monthlyCost"
+                      className="input"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      defaultValue={renewAccount.monthlyCost || ''}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="renewalRemark" className="input-label">Remark</label>
+                    <textarea
+                      id="renewalRemark"
+                      name="renewalRemark"
+                      className="input min-h-[80px] resize-none"
+                      placeholder="Add any notes about this renewal"
+                    />
+                  </div>
+                </form>
+              </div>
+
+              <div className="p-6 border-t border-border flex justify-end gap-3 bg-secondary-50 rounded-b-2xl">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRenewModalOpen(false);
+                    setRenewAccount(null);
+                  }}
+                  className="btn btn-ghost"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  form="renewHostingForm"
+                  className="btn btn-primary"
+                >
+                  Save Renewal
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Modal */}
         {isModalOpen && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">

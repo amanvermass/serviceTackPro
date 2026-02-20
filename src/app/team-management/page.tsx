@@ -15,6 +15,11 @@ export default function TeamManagement() {
     status: 'available' | 'busy' | 'offline';
     phone: string;
     projects: string[];
+    assignedProjects?: {
+      id: string;
+      projectName: string;
+      status: string;
+    }[];
     workload: number;
     permissions: string[];
     notifications: string[];
@@ -81,6 +86,17 @@ export default function TeamManagement() {
             });
           }
 
+          const assignedProjectsRaw = Array.isArray(item.assignedProjects) ? item.assignedProjects : [];
+          const assignedProjects = assignedProjectsRaw
+            .map((p: any) => ({
+              id: p._id || p.id,
+              projectName: p.projectName || p.name || '',
+              status: p.status || 'active'
+            }))
+            .filter((p: any) => p.projectName);
+
+          const projects = assignedProjects.map((p: any) => p.projectName);
+
           return {
             id: item._id,
             name: item.name,
@@ -89,8 +105,12 @@ export default function TeamManagement() {
             roleId: item.role?._id,
             status: item.status === 'active' ? 'available' : 'offline',
             phone: item.phone || '',
-            projects: [],
-            workload: 0,
+            projects,
+            assignedProjects,
+            workload:
+              typeof item.assignedProjectsCount === 'number'
+                ? item.assignedProjectsCount
+                : assignedProjects.length,
             permissions,
             notifications,
             avatar: ''
@@ -585,14 +605,26 @@ export default function TeamManagement() {
                         </td>
                         <td>
                           <div className="space-y-1">
-                            {m.projects.slice(0, 2).map((p, idx) => (
-                              <p key={idx} className="text-sm text-text-primary">{p}</p>
-                            ))}
-                            {m.projects.length > 2 && (
-                              <p className="text-xs text-text-secondary">+{m.projects.length - 2} more projects</p>
+                            {(
+                              m.assignedProjects && m.assignedProjects.length > 0
+                                ? m.assignedProjects.slice(0, 2).map((p, idx) => (
+                                    <p key={p.id || idx} className="text-sm text-text-primary">
+                                      {p.projectName}
+                                    </p>
+                                  ))
+                                : m.projects.slice(0, 2).map((p, idx) => (
+                                    <p key={idx} className="text-sm text-text-primary">
+                                      {p}
+                                    </p>
+                                  ))
                             )}
-                            {m.projects.length === 2 && (
-                              <p className="text-xs text-text-secondary">2 active projects</p>
+                            {((m.assignedProjects?.length ?? m.projects.length) > 2) && (
+                              <p className="text-xs text-text-secondary">
+                                +{(m.assignedProjects?.length ?? m.projects.length) - 2} more projects
+                              </p>
+                            )}
+                            {((m.assignedProjects?.length ?? m.projects.length) === 0) && (
+                              <p className="text-xs text-text-secondary">No assigned projects</p>
                             )}
                           </div>
                         </td>
@@ -793,15 +825,43 @@ export default function TeamManagement() {
                   Current Projects
                 </h4>
                 <div className="space-y-3">
-                  {selectedMember.projects.slice(0, 3).map((p, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 rounded-lg bg-primary-50">
-                      <div>
-                        <p className="font-medium text-text-primary">{p}</p>
-                        <p className="text-xs text-text-secondary">Assigned</p>
+                  {selectedMember.assignedProjects && selectedMember.assignedProjects.length > 0 ? (
+                    selectedMember.assignedProjects.map((p, idx) => {
+                      const status = (p.status || '').toLowerCase();
+                      const statusLabel = status
+                        ? status.charAt(0).toUpperCase() + status.slice(1)
+                        : 'Assigned';
+                      const statusClass =
+                        status === 'active'
+                          ? 'badge-success'
+                          : status === 'onhold' || status === 'on_hold'
+                          ? 'badge-warning'
+                          : status === 'completed'
+                          ? 'badge-secondary'
+                          : 'badge-primary';
+                      return (
+                        <div key={p.id || idx} className="flex items-center justify-between p-3 rounded-lg bg-primary-50">
+                          <div>
+                            <p className="font-medium text-text-primary">{p.projectName}</p>
+                            <p className="text-xs text-text-secondary">{statusLabel}</p>
+                          </div>
+                          <span className={['badge', statusClass].join(' ')}>{statusLabel}</span>
+                        </div>
+                      );
+                    })
+                  ) : selectedMember.projects.length > 0 ? (
+                    selectedMember.projects.slice(0, 3).map((p, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 rounded-lg bg-primary-50">
+                        <div>
+                          <p className="font-medium text-text-primary">{p}</p>
+                          <p className="text-xs text-text-secondary">Assigned</p>
+                        </div>
+                        <span className="badge badge-success">Active</span>
                       </div>
-                      <span className="badge badge-success">Active</span>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <p className="text-sm text-text-secondary">No assigned projects</p>
+                  )}
                 </div>
               </div>
 

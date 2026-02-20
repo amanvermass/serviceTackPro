@@ -18,6 +18,8 @@ export default function DomainManagement() {
   const [isAddDomainModalOpen, setIsAddDomainModalOpen] = useState(false);
   const [isExpiringModalOpen, setIsExpiringModalOpen] = useState(false);
   const [editingDomain, setEditingDomain] = useState<Domain | null>(null);
+  const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
+  const [renewDomain, setRenewDomain] = useState<Domain | null>(null);
   const [isAdvancedFiltersOpen, setIsAdvancedFiltersOpen] = useState(false);
   const [isAlertVisible, setIsAlertVisible] = useState(true);
   const [isExpiringLoading, setIsExpiringLoading] = useState(false);
@@ -485,6 +487,12 @@ export default function DomainManagement() {
     setIsAddDomainModalOpen(true);
   };
 
+  const handleOpenRenewModal = (domain: Domain, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRenewDomain(domain);
+    setIsRenewModalOpen(true);
+  };
+
   const handleDeleteClick = async (domainId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm('Are you sure you want to delete this domain?')) return;
@@ -566,6 +574,54 @@ export default function DomainManagement() {
     } catch (error) {
       console.error(`Error ${editingDomain ? 'updating' : 'adding'} domain:`, error);
       toastConfig.error(`An error occurred while ${editingDomain ? 'updating' : 'adding'} the domain`);
+    }
+  };
+
+  const handleRenewDomain = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!renewDomain) return;
+
+    const form = e.target as HTMLFormElement;
+    const renewalDate = (form.elements.namedItem('renewalDate') as HTMLInputElement).value;
+    const monthlyCost = (form.elements.namedItem('monthlyCost') as HTMLInputElement).value;
+    const remark = (form.elements.namedItem('renewalRemark') as HTMLTextAreaElement | null)?.value || '';
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toastConfig.error('You must be logged in to renew domains');
+        return;
+      }
+
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/domains/${renewDomain.id}/renew`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token
+        },
+        body: JSON.stringify({
+          expiryDate: renewalDate,
+          cost: parseFloat(monthlyCost) || 0,
+          remark
+        })
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (response.ok) {
+        toastConfig.success('Domain renewed successfully');
+        setIsRenewModalOpen(false);
+        setRenewDomain(null);
+        fetchDomains();
+      } else {
+        const message = data && (data.message || data.msg);
+        toastConfig.error(message || 'Failed to renew domain');
+      }
+    } catch (error) {
+      console.error('Error renewing domain:', error);
+      toastConfig.error('An error occurred while renewing the domain');
     }
   };
 
@@ -979,16 +1035,15 @@ export default function DomainManagement() {
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                        {/* <button 
-                          className="p-2 cursor-pointer rounded-lg hover:bg-surface-hover transition-smooth" 
-                          aria-label="View domain"
-                          onClick={() => handleRowClick(domain)}
+                        <button
+                          className="p-2 cursor-pointer rounded-lg hover:bg-surface-hover transition-smooth"
+                          aria-label="Renew domain"
+                          onClick={(e) => handleOpenRenewModal(domain, e)}
                         >
-                          <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                           </svg>
-                        </button> */}
+                        </button>
                         <button 
                           className="p-2 cursor-pointer rounded-lg hover:bg-surface-hover transition-smooth" 
                           aria-label="Edit domain"
@@ -1215,6 +1270,98 @@ export default function DomainManagement() {
                   className="btn btn-ghost"
                 >
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isRenewModalOpen && renewDomain && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-surface w-full max-w-md rounded-2xl shadow-2xl border border-border flex flex-col max-h-[90vh]">
+              <div className="flex items-center justify-between p-6 border-b border-border">
+                <h3 className="text-xl font-heading font-bold text-text-primary">
+                  Renew Domain
+                </h3>
+                <button
+                  onClick={() => {
+                    setIsRenewModalOpen(false);
+                    setRenewDomain(null);
+                  }}
+                  className="text-text-tertiary hover:text-text-primary transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto">
+                <form id="renewDomainForm" className="space-y-4" onSubmit={handleRenewDomain}>
+                  <div>
+                    <p className="text-sm text-text-secondary">
+                      Domain
+                    </p>
+                    <p className="text-base font-medium text-text-primary">
+                      {renewDomain.name}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="renewalDate" className="input-label">Renewal Date</label>
+                    <input
+                      type="date"
+                      id="renewalDate"
+                      name="renewalDate"
+                      className="input"
+                      defaultValue={renewDomain.expiryDate}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="monthlyCost" className="input-label">Monthly Cost ($)</label>
+                    <input
+                      type="number"
+                      id="monthlyCost"
+                      name="monthlyCost"
+                      className="input"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="renewalRemark" className="input-label">Remark</label>
+                    <textarea
+                      id="renewalRemark"
+                      name="renewalRemark"
+                      className="input min-h-[80px] resize-none"
+                      placeholder="Add any notes about this renewal"
+                    />
+                  </div>
+                </form>
+              </div>
+
+              <div className="p-6 border-t border-border flex justify-end gap-3 bg-secondary-50 rounded-b-2xl">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRenewModalOpen(false);
+                    setRenewDomain(null);
+                  }}
+                  className="btn btn-ghost"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  form="renewDomainForm"
+                  className="btn btn-primary"
+                >
+                  Save Renewal
                 </button>
               </div>
             </div>

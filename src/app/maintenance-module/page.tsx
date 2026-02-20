@@ -130,6 +130,9 @@ export default function MaintenanceModule() {
     direction: 'asc'
   });
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   const calculateMonthlyValue = (amcValue: number, frequency: string) => {
     if (!amcValue || amcValue <= 0) return 0;
     switch (frequency) {
@@ -315,6 +318,10 @@ export default function MaintenanceModule() {
     fetchClients();
   }, []);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, projects.length]);
+
   // Derived Data
   const filteredProjects = useMemo(() => {
     return projects.filter(project => {
@@ -354,6 +361,16 @@ export default function MaintenanceModule() {
       return 0;
     });
   }, [filteredProjects, sortConfig]);
+
+  const paginatedProjects = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return sortedProjects.slice(startIndex, startIndex + itemsPerPage);
+  }, [sortedProjects, currentPage]);
+
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(sortedProjects.length / itemsPerPage)),
+    [sortedProjects, itemsPerPage]
+  );
 
   const stats = useMemo(() => {
     const activeComputed = projects.filter(p => p.status === 'active').length;
@@ -716,10 +733,11 @@ export default function MaintenanceModule() {
               </table>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="table">
-                <thead>
-                  <tr>
+            <>
+              <div className="overflow-x-auto">
+                <table className="table">
+                  <thead>
+                    <tr>
                     <th
                       className="cursor-pointer hover:bg-secondary-100 transition-smooth"
                       onClick={() => handleSort('client')}
@@ -801,7 +819,7 @@ export default function MaintenanceModule() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedProjects.map((project) => (
+                  {paginatedProjects.map((project) => (
                     <tr
                       key={project.id}
                       className="hover:bg-surface-hover transition-smooth"
@@ -968,6 +986,65 @@ export default function MaintenanceModule() {
                 </tbody>
               </table>
             </div>
+
+            <div className="px-6 py-4 border-t border-border flex flex-col sm:flex-row items-center justify-center gap-4 bg-surface-50">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="btn btn-outline btn-sm h-8 px-3"
+                >
+                  Previous
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {(() => {
+                    const pages: (number | string)[] = [];
+                    if (totalPages <= 3) {
+                      for (let i = 1; i <= totalPages; i++) pages.push(i);
+                    } else {
+                      let start = Math.max(1, currentPage - 1);
+                      let end = Math.min(totalPages, start + 2);
+
+                      if (end === totalPages) {
+                        start = Math.max(1, end - 2);
+                      }
+
+                      if (start > 1) pages.push('...');
+                      for (let i = start; i <= end; i++) pages.push(i);
+                      if (end < totalPages) pages.push('...');
+                    }
+
+                    return pages.map((page, index) => (
+                      <button
+                        key={index}
+                        onClick={() => (typeof page === 'number' ? setCurrentPage(page) : null)}
+                        disabled={typeof page !== 'number'}
+                        className={`h-8 min-w-[32px] px-2 rounded-lg text-sm font-medium transition-colors
+                        ${
+                          page === currentPage
+                            ? 'bg-primary text-white shadow-sm'
+                            : typeof page === 'number'
+                            ? 'hover:bg-surface-hover text-text-secondary hover:text-text-primary'
+                            : 'text-text-tertiary cursor-default'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ));
+                  })()}
+                </div>
+
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="btn btn-outline btn-sm h-8 px-3"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+            </>
           )}
         </div>
       </main>

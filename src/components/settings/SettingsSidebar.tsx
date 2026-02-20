@@ -38,6 +38,15 @@ export default function SettingsSidebar({ activeTab, setActiveTab }: SettingsSid
             Contact Management
           </button>
           <button 
+            className={`text-left px-3 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap md:whitespace-normal ${activeTab === 'roles' ? 'bg-primary-50 text-primary' : 'text-text-secondary hover:bg-secondary-50 hover:text-text-primary'}`}
+            onClick={() => setActiveTab('roles')}
+          >
+            <svg className="w-5 h-5 inline-block mr-2 md:mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12a4 4 0 118 0 4 4 0 01-8 0zM3 20a6 6 0 0112 0H3z"/>
+            </svg>
+            Roles &amp; Permissions
+          </button>
+          <button 
             className={`text-left px-3 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap md:whitespace-normal ${activeTab === 'export' ? 'bg-primary-50 text-primary' : 'text-text-secondary hover:bg-secondary-50 hover:text-text-primary'}`}
             onClick={() => setActiveTab('export')}
           >
