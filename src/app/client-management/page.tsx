@@ -315,8 +315,7 @@ export default function ClientManagement() {
                   filteredClients.map((client) => (
                     <tr 
                       key={client.id}
-                      onClick={() => handleRowClick(client.id)}
-                      className="cursor-pointer hover:bg-surface-hover transition-smooth client-row" 
+                      className="hover:bg-surface-hover transition-smooth client-row" 
                     >
                     <td>
                       <div className="flex items-center gap-3">
@@ -356,8 +355,18 @@ export default function ClientManagement() {
                     </td>
                     <td>
                       <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                        {/* <button 
+                          className="p-2 cursor-pointer rounded-lg hover:bg-surface-hover transition-smooth" 
+                          aria-label="View client"
+                          onClick={() => handleRowClick(client.id)}
+                        >
+                          <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button> */}
                         <button 
-                          className="p-2 rounded-lg hover:bg-surface-hover transition-smooth" 
+                          className="p-2 cursor-pointer rounded-lg hover:bg-surface-hover transition-smooth" 
                           aria-label="Edit client"
                           onClick={(e) => handleEditClick(client, e)}
                         >
@@ -365,9 +374,9 @@ export default function ClientManagement() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
-                        <button className="p-2 rounded-lg hover:bg-error-50 transition-smooth" aria-label="Delete client">
+                        <button className="p-2 cursor-pointer rounded-lg hover:bg-error-50 transition-smooth" aria-label="Delete client">
                           <svg className="w-5 h-5 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
                         </button>
                       </div>
@@ -462,17 +471,17 @@ export default function ClientManagement() {
               </div>
               <form className="p-6 space-y-6" onSubmit={async (e) => {
                 e.preventDefault();
-                const form = e.currentTarget;
-                const companyName = (form.elements.namedItem('companyName') as HTMLInputElement).value;
-                const website = (form.elements.namedItem('website') as HTMLInputElement).value;
-                const contactName = (form.elements.namedItem('contactName') as HTMLInputElement).value;
-                const contactEmail = (form.elements.namedItem('contactEmail') as HTMLInputElement).value;
-                const contactPhone = (form.elements.namedItem('contactPhone') as HTMLInputElement).value;
-                const clientStatus = (form.elements.namedItem('clientStatus') as HTMLSelectElement).value;
-                const notes = (form.elements.namedItem('notes') as HTMLTextAreaElement).value;
-                const domains = parseInt((form.elements.namedItem('domains') as HTMLInputElement).value) || 0;
-                const hosting = parseInt((form.elements.namedItem('hosting') as HTMLInputElement).value) || 0;
-                const maintenance = (form.elements.namedItem('maintenance') as HTMLInputElement).checked;
+                const formData = new FormData(e.currentTarget);
+                const companyName = (formData.get('companyName') as string) || '';
+                const website = (formData.get('website') as string) || '';
+                const contactName = (formData.get('contactName') as string) || '';
+                const contactEmail = (formData.get('contactEmail') as string) || '';
+                const contactPhone = (formData.get('contactPhone') as string) || '';
+                const clientStatus = (formData.get('clientStatus') as string) || 'active';
+                const notes = (formData.get('notes') as string) || '';
+                const domains = parseInt((formData.get('domains') as string) || '0') || 0;
+                const hosting = parseInt((formData.get('hosting') as string) || '0') || 0;
+                const maintenance = formData.get('maintenance') === 'on';
 
                 const payload = {
                   company: companyName,
@@ -520,7 +529,7 @@ export default function ClientManagement() {
                   if (response.ok) {
                     toastConfig.success(editingClient ? 'Client updated successfully' : 'Client added successfully');
                     setIsAddClientModalOpen(false);
-                    fetchClients(searchTerm);
+                    fetchClients(searchTerm, currentPage);
                   } else {
                     toastConfig.error(data.message || data.msg || 'Operation failed');
                   }
@@ -535,6 +544,7 @@ export default function ClientManagement() {
                     <input 
                       type="text" 
                       id="companyName" 
+                      name="companyName"
                       className="input" 
                       placeholder="Enter company name" 
                       required 
@@ -546,6 +556,7 @@ export default function ClientManagement() {
                     <input 
                       type="url" 
                       id="website" 
+                      name="website"
                       className="input" 
                       placeholder="company.com" 
                       defaultValue={editingClient?.website}
@@ -559,6 +570,7 @@ export default function ClientManagement() {
                     <input 
                       type="text" 
                       id="contactName" 
+                      name="contactName"
                       className="input" 
                       placeholder="Enter contact name" 
                       required 
@@ -570,6 +582,7 @@ export default function ClientManagement() {
                     <input 
                       type="email" 
                       id="contactEmail" 
+                      name="contactEmail"
                       className="input" 
                       placeholder="contact@company.com" 
                       required 
@@ -584,6 +597,7 @@ export default function ClientManagement() {
                     <input 
                       type="tel" 
                       id="contactPhone" 
+                      name="contactPhone"
                       className="input" 
                       placeholder="+1 (555) 123-4567" 
                       defaultValue={editingClient?.primaryContact.phone}
@@ -591,7 +605,7 @@ export default function ClientManagement() {
                   </div>
                   <div>
                     <label htmlFor="clientStatus" className="input-label">Status</label>
-                    <select id="clientStatus" className="input" defaultValue={editingClient?.status || 'active'}>
+                    <select id="clientStatus" name="clientStatus" className="input" defaultValue={editingClient?.status || 'active'}>
                       <option value="active">Active</option>
                       <option value="pending">Pending</option>
                       <option value="inactive">Inactive</option>
@@ -620,6 +634,7 @@ export default function ClientManagement() {
                   <label htmlFor="notes" className="input-label">Notes</label>
                   <textarea 
                     id="notes" 
+                    name="notes"
                     className="input min-h-[100px]" 
                     placeholder="Add any additional notes about the client..."
                     defaultValue={editingClient?.notes || ''}

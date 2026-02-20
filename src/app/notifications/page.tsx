@@ -1,54 +1,130 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import toastConfig from '@/components/CustomToast';
 
-// Dummy data for notifications
-const notifications = [
-  {
-    id: 1,
-    title: 'Domain Expiration Warning',
-    message: 'The domain "example.com" will expire in 3 days. Please renew it to avoid service interruption.',
-    type: 'warning',
-    date: '2 hours ago',
-    read: false,
-  },
-  {
-    id: 2,
-    title: 'New Client Added',
-    message: 'A new client "TechSolutions Inc." has been successfully added to your portfolio.',
-    type: 'success',
-    date: '1 day ago',
-    read: true,
-  },
-  {
-    id: 3,
-    title: 'Maintenance Scheduled',
-    message: 'System maintenance is scheduled for Saturday, 10:00 PM EST. Expected downtime: 30 minutes.',
-    type: 'info',
-    date: '2 days ago',
-    read: true,
-  },
-  {
-    id: 4,
-    title: 'Payment Failed',
-    message: 'Automatic payment for "hosting-pro-plan" failed. Please update your payment method.',
-    type: 'error',
-    date: '3 days ago',
-    read: false,
-  },
-  {
-    id: 5,
-    title: 'SSL Certificate Renewed',
-    message: 'SSL certificate for "shop.mysite.com" has been automatically renewed.',
-    type: 'success',
-    date: '1 week ago',
-    read: true,
-  }
-];
+type NotificationItem = {
+  id: string;
+  title: string;
+  message: string;
+  type: 'warning' | 'success' | 'error' | 'info';
+  date: string;
+  read: boolean;
+};
 
 export default function Notifications() {
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        const token = localStorage.getItem('token');
+        if (!token) {
+          setIsLoading(false);
+          return;
+        }
+
+        const response = await fetch(`${baseUrl}/api/notifications/all`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'x-auth-token': token
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const items = Array.isArray(data) ? data : data.data || [];
+          const mapped: NotificationItem[] = items.map((item: any) => {
+            const created = item.createdAt ? new Date(item.createdAt) : null;
+            const displayDate = created ? created.toLocaleString() : '';
+            let mappedType: NotificationItem['type'] = 'info';
+            if (item.type === 'warning' || item.type === 'success' || item.type === 'error' || item.type === 'info') {
+              mappedType = item.type;
+            } else if (item.type === 'domain') {
+              mappedType = 'warning';
+            }
+            return {
+              id: String(item._id || item.id),
+              title: item.title || '',
+              message: item.message || '',
+              type: mappedType,
+              date: displayDate,
+              read: Boolean(item.isRead)
+            };
+          });
+          setNotifications(mapped);
+        } else {
+          toastConfig.error('Failed to load notifications');
+        }
+      } catch (error) {
+        console.error('Error fetching notifications:', error);
+        toastConfig.error('Error fetching notifications');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchNotifications();
+  }, []);
+
+  const handleNotificationClick = async (notification: NotificationItem) => {
+    if (notification.read) return;
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${baseUrl}/api/notifications/read/${notification.id}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'x-auth-token': token
+        }
+      });
+
+      if (response.ok) {
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
+        );
+      } else {
+        toastConfig.error('Failed to mark notification as read');
+      }
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      toastConfig.error('Error marking notification as read');
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${baseUrl}/api/notifications/read-all`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'x-auth-token': token
+        }
+      });
+
+      if (response.ok) {
+        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+        toastConfig.success('All notifications marked as read');
+      } else {
+        toastConfig.error('Failed to mark notifications as read');
+      }
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+      toastConfig.error('Error marking notifications as read');
+    }
+  };
+
   return (
     <div className="bg-background min-h-screen flex flex-col">
       <Header />
@@ -59,18 +135,30 @@ export default function Notifications() {
             <h1 className="text-2xl md:text-3xl font-heading font-bold text-text-primary mb-2">Notifications</h1>
             <p className="text-text-secondary text-sm md:text-base">Stay updated with important alerts and system messages</p>
           </div>
-          <button className="text-primary text-sm font-medium hover:text-primary-700 transition-colors self-start md:self-center">
-            Mark all as read
-          </button>
+          {notifications.length > 0 && (
+            <button
+              className="text-primary text-sm font-medium hover:text-primary-700 transition-colors self-start md:self-center"
+              onClick={handleMarkAllRead}
+            >
+              Mark all as read
+            </button>
+          )}
         </div>
 
         <div className="bg-surface rounded-xl border border-border shadow-sm overflow-hidden">
-          {notifications.length > 0 ? (
+          {isLoading ? (
+            <div className="p-12 text-center text-text-secondary">
+              <p className="text-sm">Loading notifications...</p>
+            </div>
+          ) : notifications.length > 0 ? (
             <div className="divide-y divide-border">
               {notifications.map((notification) => (
                 <div 
                   key={notification.id} 
-                  className={`p-4 md:p-6 hover:bg-surface-hover transition-colors flex gap-4 ${notification.read ? 'opacity-70' : 'bg-primary-50/10'}`}
+                  className={`p-4 md:p-6 hover:bg-surface-hover transition-colors flex gap-4 cursor-pointer ${
+                    notification.read ? 'opacity-70' : 'bg-primary-50/10'
+                  }`}
+                  onClick={() => handleNotificationClick(notification)}
                 >
                   <div className={`mt-1 flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center
                     ${notification.type === 'warning' ? 'bg-yellow-100 text-yellow-600' : 

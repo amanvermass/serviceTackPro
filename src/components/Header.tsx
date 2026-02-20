@@ -6,38 +6,22 @@ import { usePathname, useRouter } from 'next/navigation';
 import { CURRENT_USER } from '@/data/mock-user-data';
 import toastConfig from '@/components/CustomToast';
 
-const RECENT_NOTIFICATIONS = [
-  {
-    id: 1,
-    title: 'Domain Expiration Warning',
-    message: 'The domain "example.com" will expire in 3 days.',
-    type: 'warning',
-    time: '2h ago',
-    read: false,
-  },
-  {
-    id: 2,
-    title: 'New Client Added',
-    message: 'TechSolutions Inc. has been added.',
-    type: 'success',
-    time: '1d ago',
-    read: true,
-  },
-  {
-    id: 4,
-    title: 'Payment Failed',
-    message: 'Automatic payment for "hosting-pro-plan" failed.',
-    type: 'error',
-    time: '3d ago',
-    read: false,
-  }
-];
+type NotificationType = {
+  id: string;
+  title: string;
+  message: string;
+  type: 'warning' | 'success' | 'error' | 'info';
+  time: string;
+  read: boolean;
+};
 
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationType[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const profileRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
 
@@ -54,12 +38,131 @@ export default function Header() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const response = await fetch(`${baseUrl}/api/notifications/recent`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'x-auth-token': token
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const items = Array.isArray(data) ? data : data.data || [];
+          const mapped: NotificationType[] = items.map((item: any) => ({
+            id: String(item.id || item._id),
+            title: item.title || '',
+            message: item.message || '',
+            type: (item.type as NotificationType['type']) || 'info',
+            time: item.time || '',
+            read: Boolean(item.read)
+          }));
+          setNotifications(mapped);
+        }
+      } catch (error) {
+        console.error('Error fetching notifications:', error);
+      }
+    };
+
+    const fetchUnreadCount = async () => {
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const response = await fetch(`${baseUrl}/api/notifications/unread-count`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'x-auth-token': token
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (typeof data === 'number') {
+            setUnreadCount(data);
+          } else if (typeof data?.count === 'number') {
+            setUnreadCount(data.count);
+          } else if (typeof data?.unreadCount === 'number') {
+            setUnreadCount(data.unreadCount);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching unread count:', error);
+      }
+    };
+
+    fetchNotifications();
+    fetchUnreadCount();
+  }, []);
+
+  const handleNotificationClick = async (notification: NotificationType) => {
+    try {
+      if (!notification.read) {
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const response = await fetch(`${baseUrl}/api/notifications/read/${notification.id}`, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'x-auth-token': token
+          }
+        });
+        if (response.ok) {
+          setNotifications((prev) =>
+            prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
+          );
+          setUnreadCount((prev) => (notification.read ? prev : Math.max(0, prev - 1)));
+        }
+      }
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`${baseUrl}/api/notifications/read-all`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'x-auth-token': token
+        }
+      });
+      if (response.ok) {
+        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+        setUnreadCount(0);
+      }
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
+  };
+
   const handleLogout = async () => {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toastConfig.error('No token, authorization denied');
+        return;
+      }
       const response = await fetch(`${apiUrl}/api/logout`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-auth-token': token
+        },
       });
 
       if (response.ok) {
@@ -158,19 +261,34 @@ export default function Header() {
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                   </svg>
-                  {/* Notification Badge */}
-                  <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-surface"></span>
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] leading-none rounded-full border-2 border-surface flex items-center justify-center">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
                 </button>
 
                 {isNotificationOpen && (
                   <div className="absolute right-0 mt-2 w-80 bg-surface border border-border rounded-lg shadow-lg py-1 z-[100]">
                     <div className="px-4 py-3 border-b border-border flex justify-between items-center bg-gray-50/50">
                       <h3 className="font-semibold text-sm text-text-primary">Notifications</h3>
-                      <span className="text-xs text-primary cursor-pointer hover:text-primary-700 font-medium">Mark all read</span>
+                      <button
+                        type="button"
+                        className="text-xs text-primary cursor-pointer hover:text-primary-700 font-medium"
+                        onClick={handleMarkAllRead}
+                      >
+                        Mark all read
+                      </button>
                     </div>
                     <div className="max-h-[60vh] overflow-y-auto">
-                      {RECENT_NOTIFICATIONS.map((notification) => (
-                        <div key={notification.id} className={`px-4 py-3 hover:bg-surface-hover border-b border-border last:border-0 cursor-pointer transition-colors ${!notification.read ? 'bg-primary-50/10' : ''}`}>
+                      {notifications.map((notification) => (
+                        <div
+                          key={notification.id}
+                          className={`px-4 py-3 hover:bg-surface-hover border-b border-border last:border-0 cursor-pointer transition-colors ${
+                            !notification.read ? 'bg-primary-50/10' : ''
+                          }`}
+                          onClick={() => handleNotificationClick(notification)}
+                        >
                           <div className="flex gap-3">
                             <div className={`mt-1 flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center
                               ${notification.type === 'warning' ? 'bg-yellow-100 text-yellow-600' : 

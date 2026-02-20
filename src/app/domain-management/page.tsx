@@ -16,9 +16,16 @@ export default function DomainManagement() {
   const [vendors, setVendors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddDomainModalOpen, setIsAddDomainModalOpen] = useState(false);
+  const [isExpiringModalOpen, setIsExpiringModalOpen] = useState(false);
   const [editingDomain, setEditingDomain] = useState<Domain | null>(null);
   const [isAdvancedFiltersOpen, setIsAdvancedFiltersOpen] = useState(false);
   const [isAlertVisible, setIsAlertVisible] = useState(true);
+  const [isExpiringLoading, setIsExpiringLoading] = useState(false);
+  const [expiringDomains, setExpiringDomains] = useState<any[]>([]);
+  const [expiredDomains, setExpiredDomains] = useState<any[]>([]);
+  const [expiringSoonCount, setExpiringSoonCount] = useState<number | null>(null);
+  const [expiredCount, setExpiredCount] = useState<number | null>(null);
+  const [isSendingNotifications, setIsSendingNotifications] = useState(false);
   
   // Filters State
   const [searchQuery, setSearchQuery] = useState('');
@@ -222,6 +229,44 @@ export default function DomainManagement() {
   }, [fetchClients, fetchVendors]);
 
   useEffect(() => {
+    const fetchRenewalAlerts = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          setExpiringSoonCount(null);
+          setExpiredCount(null);
+          return;
+        }
+
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/domains/renewal-alerts`, {
+          headers: {
+            'x-auth-token': token,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          const data = result.data || {};
+          const expSoon = Number(data.expiringSoon ?? 0);
+          const expired = Number(data.expired ?? 0);
+          setExpiringSoonCount(Number.isNaN(expSoon) ? 0 : expSoon);
+          setExpiredCount(Number.isNaN(expired) ? 0 : expired);
+        } else {
+          setExpiringSoonCount(0);
+          setExpiredCount(0);
+        }
+      } catch (error) {
+        console.error('Error fetching renewal alerts:', error);
+        setExpiringSoonCount(0);
+        setExpiredCount(0);
+      }
+    };
+
+    fetchRenewalAlerts();
+  }, []);
+
+  useEffect(() => {
     fetchDomains();
   }, [fetchDomains]);
 
@@ -262,6 +307,45 @@ export default function DomainManagement() {
       setSelectedDomains(new Set(filteredDomains.map(d => d.id)));
     } else {
       setSelectedDomains(new Set());
+    }
+  };
+
+  const handleViewExpiringDomains = async () => {
+    setIsExpiringModalOpen(true);
+    setIsExpiringLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setExpiringDomains([]);
+        setExpiredDomains([]);
+        setIsExpiringLoading(false);
+        return;
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/domains/expiring`, {
+        headers: {
+          'x-auth-token': token,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const data = result.data || {};
+        setExpiringDomains(Array.isArray(data.expiring) ? data.expiring : []);
+        setExpiredDomains(Array.isArray(data.expired) ? data.expired : []);
+      } else {
+        toastConfig.error('Failed to load expiring domains');
+        setExpiringDomains([]);
+        setExpiredDomains([]);
+      }
+    } catch (error) {
+      console.error('Error fetching expiring domains:', error);
+      toastConfig.error('Error fetching expiring domains');
+      setExpiringDomains([]);
+      setExpiredDomains([]);
+    } finally {
+      setIsExpiringLoading(false);
     }
   };
 
@@ -343,6 +427,40 @@ export default function DomainManagement() {
       toastConfig.error('An error occurred while exporting domains');
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleSendRenewalNotifications = async () => {
+    if (isSendingNotifications) return;
+    setIsSendingNotifications(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toastConfig.error('You must be logged in to send notifications');
+        setIsSendingNotifications(false);
+        return;
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/domains/send-renewal-notifications`, {
+        method: 'POST',
+        headers: {
+          'x-auth-token': token,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        toastConfig.success(result.message || 'Renewal notifications sent successfully');
+      } else {
+        toastConfig.error(result.message || 'Failed to send renewal notifications');
+      }
+    } catch (error) {
+      console.error('Error sending renewal notifications:', error);
+      toastConfig.error('Error sending renewal notifications');
+    } finally {
+      setIsSendingNotifications(false);
     }
   };
 
@@ -510,15 +628,38 @@ export default function DomainManagement() {
               <div className="flex-1">
                 <h3 className="font-heading font-semibold text-warning-700 mb-1">Renewal Alerts</h3>
                 <p className="text-sm text-warning-700 mb-3">
-                  <span id="expiringCount" className="font-bold">3 domains</span> expiring within 30 days •
-                  <span id="expiredCount" className="font-bold"> 1 domain</span> already expired
+                  {expiringSoonCount !== null && expiringSoonCount > 0 && (
+                    <>
+                      <span id="expiringCount" className="font-bold">
+                        {expiringSoonCount} domain{expiringSoonCount === 1 ? '' : 's'}
+                      </span>{' '}
+                      expiring within 30 days
+                      {!(expiredCount !== null && expiredCount > 0) && '.'}
+                    </>
+                  )}
+                  {expiringSoonCount !== null && expiringSoonCount > 0 && expiredCount !== null && expiredCount > 0 && ' • '}
+                  {expiredCount !== null && expiredCount > 0 && (
+                    <>
+                      <span id="expiredCount" className="font-bold">
+                        {expiredCount} domain{expiredCount === 1 ? '' : 's'}
+                      </span>{' '}
+                      already expired.
+                    </>
+                  )}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <button className="btn btn-warning h-9 px-4 text-sm">
+                  <button 
+                    className="btn btn-warning h-9 px-4 text-sm"
+                    onClick={handleViewExpiringDomains}
+                  >
                     View Expiring Domains
                   </button>
-                  <button className="btn btn-outline h-9 px-4 text-sm border-warning-600 text-warning-700 hover:bg-warning-100">
-                    Send Notifications
+                  <button 
+                    className="btn btn-outline h-9 px-4 text-sm border-warning-600 text-warning-700 hover:bg-warning-100 disabled:opacity-60 disabled:cursor-not-allowed"
+                    onClick={handleSendRenewalNotifications}
+                    disabled={isSendingNotifications}
+                  >
+                    {isSendingNotifications ? 'Sending...' : 'Send Notifications'}
                   </button>
                 </div>
               </div>
@@ -762,8 +903,7 @@ export default function DomainManagement() {
                   filteredDomains.map((domain) => (
                     <tr 
                       key={domain.id} 
-                      className="hover:bg-surface-hover transition-smooth group cursor-pointer"
-                      onClick={() => handleRowClick(domain)}
+                      className="hover:bg-surface-hover transition-smooth group"
                     >
                     <td className="w-12" onClick={(e) => e.stopPropagation()}>
                       <input 
@@ -839,8 +979,18 @@ export default function DomainManagement() {
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                        {/* <button 
+                          className="p-2 cursor-pointer rounded-lg hover:bg-surface-hover transition-smooth" 
+                          aria-label="View domain"
+                          onClick={() => handleRowClick(domain)}
+                        >
+                          <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button> */}
                         <button 
-                          className="p-2 rounded-lg hover:bg-surface-hover transition-smooth" 
+                          className="p-2 cursor-pointer rounded-lg hover:bg-surface-hover transition-smooth" 
                           aria-label="Edit domain"
                           onClick={(e) => handleEditClick(domain, e)}
                         >
@@ -849,7 +999,7 @@ export default function DomainManagement() {
                           </svg>
                         </button>
                         <button 
-                          className="p-2 rounded-lg hover:bg-error-50 transition-smooth" 
+                          className="p-2 cursor-pointer rounded-lg hover:bg-error-50 transition-smooth" 
                           aria-label="Delete domain"
                           onClick={(e) => handleDeleteClick(domain.id, e)}
                         >
@@ -932,6 +1082,145 @@ export default function DomainManagement() {
             </div>
           </div>
         </div>
+        {/* Expiring/Expired Domains Modal */}
+        {isExpiringModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-surface w-full max-w-3xl rounded-2xl shadow-2xl border border-border flex flex-col max-h-[90vh]">
+              <div className="flex items-center justify-between p-6 border-b border-border">
+                <h3 className="text-xl font-heading font-bold text-text-primary">
+                  Expiring &amp; Expired Domains
+                </h3>
+                <button 
+                  onClick={() => setIsExpiringModalOpen(false)}
+                  className="text-text-tertiary hover:text-text-primary transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto space-y-6">
+                {isExpiringLoading ? (
+                  <p className="text-sm text-text-secondary">Loading domains...</p>
+                ) : (
+                  <>
+                    <div>
+                      <h4 className="font-heading font-semibold text-text-primary mb-3">
+                        Expiring Soon
+                      </h4>
+                      {expiringDomains.length === 0 ? (
+                        <p className="text-sm text-text-secondary">No domains expiring soon.</p>
+                      ) : (
+                        <div className="border border-border rounded-lg overflow-hidden">
+                          <table className="min-w-full text-sm">
+                            <thead className="bg-secondary-50">
+                              <tr>
+                                <th className="px-4 py-2 text-left">Domain</th>
+                                <th className="px-4 py-2 text-left">Client</th>
+                                <th className="px-4 py-2 text-left">Registrar</th>
+                                <th className="px-4 py-2 text-left">Expiry Date</th>
+                                <th className="px-4 py-2 text-left">Days Left</th>
+                                <th className="px-4 py-2 text-left">Purchased By</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {expiringDomains.map((item: any) => (
+                                <tr key={item._id} className="border-t border-border">
+                                  <td className="px-4 py-2 text-text-primary font-medium">
+                                    {item.domainName}
+                                  </td>
+                                  <td className="px-4 py-2 text-text-secondary">
+                                    {item.client?.name || 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-2 text-text-secondary">
+                                    {item.registrar?.name || 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-2 text-text-secondary">
+                                    {item.expiryDate ? new Date(item.expiryDate).toLocaleDateString() : 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-2 text-text-secondary">
+                                    {typeof item.daysLeft === 'number' ? `${item.daysLeft} days` : 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-2 text-text-secondary">
+                                    {item.purchasedBy === 'kvtmedia'
+                                      ? 'KVT Media'
+                                      : item.purchasedBy === 'client'
+                                        ? 'Client'
+                                        : ''}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <h4 className="font-heading font-semibold text-text-primary mb-3">
+                        Expired
+                      </h4>
+                      {expiredDomains.length === 0 ? (
+                        <p className="text-sm text-text-secondary">No expired domains.</p>
+                      ) : (
+                        <div className="border border-border rounded-lg overflow-hidden">
+                          <table className="min-w-full text-sm">
+                            <thead className="bg-secondary-50">
+                              <tr>
+                                <th className="px-4 py-2 text-left">Domain</th>
+                                <th className="px-4 py-2 text-left">Client</th>
+                                <th className="px-4 py-2 text-left">Registrar</th>
+                                <th className="px-4 py-2 text-left">Expiry Date</th>
+                                <th className="px-4 py-2 text-left">Purchased By</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {expiredDomains.map((item: any) => (
+                                <tr key={item._id} className="border-t border-border">
+                                  <td className="px-4 py-2 text-text-primary font-medium">
+                                    {item.domainName}
+                                  </td>
+                                  <td className="px-4 py-2 text-text-secondary">
+                                    {item.client?.name || 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-2 text-text-secondary">
+                                    {item.registrar?.name || 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-2 text-text-secondary">
+                                    {item.expiryDate ? new Date(item.expiryDate).toLocaleDateString() : 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-2 text-text-secondary">
+                                    {item.purchasedBy === 'kvtmedia'
+                                      ? 'KVT Media'
+                                      : item.purchasedBy === 'client'
+                                        ? 'Client'
+                                        : ''}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="p-6 border-t border-border flex justify-end bg-secondary-50 rounded-b-2xl">
+                <button 
+                  type="button"
+                  onClick={() => setIsExpiringModalOpen(false)}
+                  className="btn btn-ghost"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Add/Edit Domain Modal */}
         {isAddDomainModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">

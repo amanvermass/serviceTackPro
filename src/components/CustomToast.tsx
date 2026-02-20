@@ -11,22 +11,20 @@ interface CustomToastProps {
 // Custom Toast Component
 const CustomToast: React.FC<CustomToastProps> = ({ t, message, type = 'default' }) => {
   const [progress, setProgress] = useState(100);
-  const toast = toastOriginal;
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev <= 0) {
-          clearInterval(interval);
-          toast.dismiss(t.id);
-          return 0;
-        }
-        return prev - 1;
-      });
+      setProgress((prev) => (prev <= 0 ? 0 : prev - 1));
     }, 50);
 
     return () => clearInterval(interval);
-  }, [t.id, toast]);
+  }, []);
+
+  useEffect(() => {
+    if (progress <= 0) {
+      toastOriginal.dismiss(t.id);
+    }
+  }, [progress, t.id]);
 
   return (
     <div
@@ -56,7 +54,7 @@ const CustomToast: React.FC<CustomToastProps> = ({ t, message, type = 'default' 
         
         {/* Close Button */}
         <button
-          onClick={() => toast.dismiss(t.id)}
+          onClick={() => toastOriginal.dismiss(t.id)}
           className="absolute top-1/2 right-2 transform -translate-y-1/2 text-gray-400 hover:text-gray-500 p-1"
         >
           <X className="w-5 h-5" />

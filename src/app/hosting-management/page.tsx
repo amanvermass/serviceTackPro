@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Tooltip from '@/components/Tooltip';
 import { toast } from 'react-hot-toast';
+import Footer from '@/components/Footer';
 import TableShimmer from '@/components/TableShimmer';
 
 type HostingStatus = 'Active' | 'Expiring Soon' | 'Expired';
@@ -61,6 +62,14 @@ export default function HostingManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isAlertVisible, setIsAlertVisible] = useState(true);
+  const [expiringSoonCount, setExpiringSoonCount] = useState<number | null>(null);
+  const [expiredCount, setExpiredCount] = useState<number | null>(null);
+  const [isExpiringModalOpen, setIsExpiringModalOpen] = useState(false);
+  const [isExpiringLoading, setIsExpiringLoading] = useState(false);
+  const [expiringHosting, setExpiringHosting] = useState<any[]>([]);
+  const [expiredHosting, setExpiredHosting] = useState<any[]>([]);
+  const [isSendingNotifications, setIsSendingNotifications] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -154,6 +163,45 @@ export default function HostingManagement() {
 
   useEffect(() => {
     fetchClients();
+  }, []);
+
+  useEffect(() => {
+    const fetchRenewalAlerts = async () => {
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
+        const token = localStorage.getItem('token');
+        if (!token) {
+          setExpiringSoonCount(null);
+          setExpiredCount(null);
+          return;
+        }
+
+        const response = await fetch(`${baseUrl}/api/hosting/renewal-alerts`, {
+          headers: {
+            'x-auth-token': token,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          const data = result.data || {};
+          const expSoon = Number(data.expiringSoon ?? 0);
+          const expired = Number(data.expired ?? 0);
+          setExpiringSoonCount(Number.isNaN(expSoon) ? 0 : expSoon);
+          setExpiredCount(Number.isNaN(expired) ? 0 : expired);
+        } else {
+          setExpiringSoonCount(0);
+          setExpiredCount(0);
+        }
+      } catch (error) {
+        console.error('Error fetching hosting renewal alerts:', error);
+        setExpiringSoonCount(0);
+        setExpiredCount(0);
+      }
+    };
+
+    fetchRenewalAlerts();
   }, []);
 
   const fetchHostingAccounts = async (page = 1) => {
@@ -370,13 +418,91 @@ export default function HostingManagement() {
     }
   };
 
+  const handleViewExpiringHosting = async () => {
+    setIsExpiringModalOpen(true);
+    setIsExpiringLoading(true);
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('You must be logged in to view expiring hosting');
+        setExpiringHosting([]);
+        setExpiredHosting([]);
+        setIsExpiringLoading(false);
+        return;
+      }
+
+      const response = await fetch(`${baseUrl}/api/hosting/expiring`, {
+        headers: {
+          'x-auth-token': token,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const data = result.data || {};
+        setExpiringHosting(Array.isArray(data.expiring) ? data.expiring : []);
+        setExpiredHosting(Array.isArray(data.expired) ? data.expired : []);
+      } else {
+        toast.error('Failed to load expiring hosting');
+        setExpiringHosting([]);
+        setExpiredHosting([]);
+      }
+    } catch (error) {
+      console.error('Error fetching expiring hosting:', error);
+      toast.error('Error fetching expiring hosting');
+      setExpiringHosting([]);
+      setExpiredHosting([]);
+    } finally {
+      setIsExpiringLoading(false);
+    }
+  };
+
+  const handleSendRenewalNotifications = async () => {
+    if (isSendingNotifications) return;
+    setIsSendingNotifications(true);
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('You must be logged in to send notifications');
+        setIsSendingNotifications(false);
+        return;
+      }
+
+      const response = await fetch(`${baseUrl}/api/hosting/send-renewal-notifications`, {
+        method: 'POST',
+        headers: {
+          'x-auth-token': token,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        toast.success(result.message || 'Renewal notifications sent successfully');
+      } else {
+        toast.error(result.message || 'Failed to send renewal notifications');
+      }
+    } catch (error) {
+      console.error('Error sending renewal notifications:', error);
+      toast.error('Error sending renewal notifications');
+    } finally {
+      setIsSendingNotifications(false);
+    }
+  };
+
   const handleSaveHosting = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
     
     const formData = new FormData(e.currentTarget);
     const selectedclient = formData.get('clientName') as string;
-    const data = {
+    const passwordValue = (formData.get('password') as string | null) || '';
+
+    const data: any = {
       client: selectedclient,
       domain: formData.get('domain') as string,
       provider: formData.get('provider') as string,
@@ -386,8 +512,11 @@ export default function HostingManagement() {
       notes: formData.get('notes') as string,
       purchasedBy: formData.get('purchasedBy') as string,
       loginUrl: formData.get('loginUrl') as string,
-      password: formData.get('password') as string,
     };
+
+    if (!editingAccount || passwordValue.trim() !== '') {
+      data.password = passwordValue;
+    }
 
     try {
        const token = localStorage.getItem('token');
@@ -516,6 +645,65 @@ export default function HostingManagement() {
             </div>
           </div>
         </div>
+
+        {isAlertVisible && (
+          <div id="hostingExpiryAlertBanner" className="card mb-6 border-l-4 border-warning bg-warning-50">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0">
+                <svg className="w-6 h-6 text-warning" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="font-heading font-semibold text-warning-700 mb-1">Renewal Alerts</h3>
+                <p className="text-sm text-warning-700 mb-3">
+                  {expiringSoonCount !== null && expiringSoonCount > 0 && (
+                    <>
+                      <span id="hostingExpiringCount" className="font-bold">
+                        {expiringSoonCount} hosting account{expiringSoonCount === 1 ? '' : 's'}
+                      </span>{' '}
+                      expiring within 30 days
+                      {!(expiredCount !== null && expiredCount > 0) && '.'}
+                    </>
+                  )}
+                  {expiringSoonCount !== null && expiringSoonCount > 0 && expiredCount !== null && expiredCount > 0 && ' • '}
+                  {expiredCount !== null && expiredCount > 0 && (
+                    <>
+                      <span id="hostingExpiredCount" className="font-bold">
+                        {expiredCount} hosting account{expiredCount === 1 ? '' : 's'}
+                      </span>{' '}
+                      already expired.
+                    </>
+                  )}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button 
+                    className="btn btn-warning h-9 px-4 text-sm"
+                    onClick={handleViewExpiringHosting}
+                  >
+                    View Expiring Hosting
+                  </button>
+                  <button 
+                    className="btn btn-outline h-9 px-4 text-sm border-warning-600 text-warning-700 hover:bg-warning-100 disabled:opacity-60 disabled:cursor-not-allowed"
+                    onClick={handleSendRenewalNotifications}
+                    disabled={isSendingNotifications}
+                  >
+                    {isSendingNotifications ? 'Sending...' : 'Send Notifications'}
+                  </button>
+                </div>
+              </div>
+              <button 
+                className="flex-shrink-0 p-1 rounded-lg hover:bg-warning-100 transition-smooth" 
+                aria-label="Close alert"
+                onClick={() => setIsAlertVisible(false)}
+              >
+                <svg className="w-5 h-5 text-warning-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
@@ -883,6 +1071,147 @@ export default function HostingManagement() {
             </div>
           </div>
         </div>
+        {isExpiringModalOpen && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-surface w-full max-w-3xl rounded-2xl shadow-2xl border border-border flex flex-col max-h-[90vh]">
+              <div className="flex items-center justify-between p-6 border-b border-border">
+                <h3 className="text-xl font-heading font-bold text-text-primary">
+                  Expiring &amp; Expired Hosting
+                </h3>
+                <button 
+                  onClick={() => setIsExpiringModalOpen(false)}
+                  className="text-text-tertiary hover:text-text-primary transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto space-y-6">
+                {isExpiringLoading ? (
+                  <p className="text-sm text-text-secondary">Loading hosting accounts...</p>
+                ) : (
+                  <>
+                    <div>
+                      <h4 className="font-heading font-semibold text-text-primary mb-3">
+                        Expiring Soon
+                      </h4>
+                      {expiringHosting.length === 0 ? (
+                        <p className="text-sm text-text-secondary">No hosting accounts expiring soon.</p>
+                      ) : (
+                        <div className="border border-border rounded-lg overflow-hidden">
+                          <table className="min-w-full text-sm">
+                            <thead className="bg-secondary-50">
+                              <tr>
+                                <th className="px-4 py-2 text-left">Domain</th>
+                                <th className="px-4 py-2 text-left">Client</th>
+                                <th className="px-4 py-2 text-left">Provider</th>
+                                <th className="px-4 py-2 text-left">Renewal Date</th>
+                                <th className="px-4 py-2 text-left">Days Left</th>
+                                <th className="px-4 py-2 text-left">Purchased By</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {expiringHosting.map((item: any) => (
+                                <tr key={item._id} className="border-t border-border">
+                                  <td className="px-4 py-2 text-text-primary font-medium">
+                                    {item.domain || item.domainName || item.service || 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-2 text-text-secondary">
+                                    {item.client?.name || item.clientName || item.client || 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-2 text-text-secondary">
+                                    {item.provider?.name || item.provider || 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-2 text-text-secondary">
+                                    {item.renewalDate || item.expiryDate
+                                      ? new Date(item.renewalDate || item.expiryDate).toLocaleDateString()
+                                      : 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-2 text-text-secondary">
+                                    {typeof item.daysLeft === 'number' ? `${item.daysLeft} days` : 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-2 text-text-secondary">
+                                    {item.purchasedBy === 'kvtmedia'
+                                      ? 'KVT Media'
+                                      : item.purchasedBy === 'client'
+                                        ? 'Client'
+                                        : ''}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <h4 className="font-heading font-semibold text-text-primary mb-3">
+                        Expired
+                      </h4>
+                      {expiredHosting.length === 0 ? (
+                        <p className="text-sm text-text-secondary">No expired hosting accounts.</p>
+                      ) : (
+                        <div className="border border-border rounded-lg overflow-hidden">
+                          <table className="min-w-full text-sm">
+                            <thead className="bg-secondary-50">
+                              <tr>
+                                <th className="px-4 py-2 text-left">Domain</th>
+                                <th className="px-4 py-2 text-left">Client</th>
+                                <th className="px-4 py-2 text-left">Provider</th>
+                                <th className="px-4 py-2 text-left">Renewal Date</th>
+                                <th className="px-4 py-2 text-left">Purchased By</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {expiredHosting.map((item: any) => (
+                                <tr key={item._id} className="border-t border-border">
+                                  <td className="px-4 py-2 text-text-primary font-medium">
+                                    {item.domain || item.domainName || item.service || 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-2 text-text-secondary">
+                                    {item.client?.name || item.clientName || item.client || 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-2 text-text-secondary">
+                                    {item.provider?.name || item.provider || 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-2 text-text-secondary">
+                                    {item.renewalDate || item.expiryDate
+                                      ? new Date(item.renewalDate || item.expiryDate).toLocaleDateString()
+                                      : 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-2 text-text-secondary">
+                                    {item.purchasedBy === 'kvtmedia'
+                                      ? 'KVT Media'
+                                      : item.purchasedBy === 'client'
+                                        ? 'Client'
+                                        : ''}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="p-6 border-t border-border flex justify-end bg-secondary-50 rounded-b-2xl">
+                <button 
+                  type="button"
+                  onClick={() => setIsExpiringModalOpen(false)}
+                  className="btn btn-ghost"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {/* Modal */}
         {isModalOpen && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -1099,6 +1428,7 @@ export default function HostingManagement() {
           </div>
         )}
       </main>
+      <Footer />
     </div>
   );
 }

@@ -804,12 +804,7 @@ export default function MaintenanceModule() {
                   {sortedProjects.map((project) => (
                     <tr
                       key={project.id}
-                      className="cursor-pointer hover:bg-surface-hover transition-smooth"
-                      onClick={(e) => {
-                        if (!(e.target as HTMLElement).closest('button')) {
-                          navigateToDetails(project.id);
-                        }
-                      }}
+                      className="hover:bg-surface-hover transition-smooth"
                     >
                       <td>
                         <div className="flex items-center gap-3">
@@ -903,8 +898,33 @@ export default function MaintenanceModule() {
                           className="flex items-center justify-end gap-2"
                           onClick={(e) => e.stopPropagation()}
                         >
+                          {/* <button
+                            className="p-2 cursor-pointer rounded-lg hover:bg-surface-hover transition-smooth"
+                            aria-label="View project"
+                            onClick={() => navigateToDetails(project.id)}
+                          >
+                            <svg
+                              className="w-5 h-5 text-text-secondary"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                              />
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                              />
+                            </svg>
+                          </button> */}
                           <button
-                            className="p-2 rounded-lg hover:bg-surface-hover transition-smooth"
+                            className="p-2 cursor-pointer rounded-lg hover:bg-surface-hover transition-smooth"
                             aria-label="Edit project"
                             onClick={() => handleEditClick(project)}
                           >
@@ -923,7 +943,7 @@ export default function MaintenanceModule() {
                             </svg>
                           </button>
                           <button
-                            className="p-2 rounded-lg hover:bg-error-50 transition-smooth"
+                            className="p-2 cursor-pointer rounded-lg hover:bg-error-50 transition-smooth"
                             aria-label="Delete project"
                             onClick={() => handleDeleteProject(project.id)}
                           >

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import TableShimmer from '@/components/TableShimmer';
@@ -18,6 +19,7 @@ interface Vendor {
 }
 
 export default function VendorManagement() {
+  const router = useRouter();
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddVendorModalOpen, setIsAddVendorModalOpen] = useState(false);
@@ -189,6 +191,10 @@ export default function VendorManagement() {
   const totalPages = Math.ceil(filteredVendors.length / itemsPerPage);
   const currentVendors = filteredVendors.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
+  const handleViewVendor = (vendorId: string) => {
+    router.push(`/domain-management/vendors/${vendorId}`);
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
@@ -208,7 +214,7 @@ export default function VendorManagement() {
                 setLogoFile(null);
                 setIsAddVendorModalOpen(true);
               }}
-              className="btn btn-primary flex items-center gap-2 w-full sm:w-auto"
+              className="btn btn-primary cursor-pointer flex items-center gap-2 w-full sm:w-auto"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -260,7 +266,7 @@ export default function VendorManagement() {
             <p className="text-sm text-text-secondary">
               Showing <span className="font-semibold text-text-primary">{filteredVendors.length}</span> vendors
             </p>
-            <button className="btn btn-outline text-sm h-9 px-4 flex items-center gap-2">
+            <button className="btn btn-outline cursor-pointer text-sm h-9 px-4 flex items-center gap-2">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
@@ -308,7 +314,7 @@ export default function VendorManagement() {
                   <TableShimmer columns={5} rows={5} />
                 ) : (
                   currentVendors.map((vendor) => (
-                    <tr key={vendor.id} className="hover:bg-surface-hover transition-smooth group cursor-pointer">
+                    <tr key={vendor.id} className="hover:bg-surface-hover transition-smooth group">
                       <td>
                         <div className="flex items-center gap-3">
                           <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden border border-border
@@ -350,8 +356,18 @@ export default function VendorManagement() {
                       </td>
                       <td>
                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                          {/* <button 
+                            className="p-2 cursor-pointer rounded-lg hover:bg-surface-hover transition-smooth" 
+                            aria-label="View vendor"
+                            onClick={() => handleViewVendor(vendor.id)}
+                          >
+                            <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </button> */}
                           <button 
-                            className="p-2 rounded-lg hover:bg-surface-hover transition-smooth" 
+                            className="p-2 cursor-pointer rounded-lg hover:bg-surface-hover transition-smooth" 
                             aria-label="Edit vendor"
                             onClick={() => handleEditClick(vendor)}
                           >
@@ -360,7 +376,7 @@ export default function VendorManagement() {
                             </svg>
                           </button>
                           <button 
-                            className="p-2 rounded-lg hover:bg-error-50 transition-smooth" 
+                            className="p-2 cursor-pointer rounded-lg hover:bg-error-50 transition-smooth" 
                             aria-label="Delete vendor"
                             onClick={() => handleDeleteVendor(vendor.id)}
                           >
@@ -383,7 +399,7 @@ export default function VendorManagement() {
                <button 
                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                  disabled={currentPage === 1}
-                 className="btn btn-outline btn-sm h-8 px-3"
+                 className="btn btn-outline cursor-pointer btn-sm h-8 px-3"
                >
                  Previous
                </button>
@@ -396,7 +412,7 @@ export default function VendorManagement() {
                      className={`h-8 min-w-[32px] px-2 rounded-lg text-sm font-medium transition-colors
                        ${page === currentPage 
                          ? 'bg-primary text-white shadow-sm' 
-                         : 'hover:bg-surface-hover text-text-secondary hover:text-text-primary'}`}
+                        : 'hover:bg-surface-hover text-text-secondary hover:text-text-primary cursor-pointer'}`}
                    >
                      {page}
                    </button>
@@ -406,7 +422,7 @@ export default function VendorManagement() {
                <button 
                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                  disabled={currentPage === totalPages || totalPages === 0}
-                 className="btn btn-outline btn-sm h-8 px-3"
+                 className="btn btn-outline cursor-pointer btn-sm h-8 px-3"
                >
                  Next
                </button>
@@ -428,7 +444,7 @@ export default function VendorManagement() {
                   setIsAddVendorModalOpen(false);
                   setEditingVendor(null);
                 }}
-                className="text-text-tertiary hover:text-text-primary transition-colors"
+                className="text-text-tertiary hover:text-text-primary transition-colors cursor-pointer"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -476,7 +492,7 @@ export default function VendorManagement() {
                             fileInputRef.current.value = '';
                           }
                         }}
-                        className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                       >
                         <span className="text-white font-medium bg-black/50 px-3 py-1 rounded-full text-sm backdrop-blur-sm">Remove Image</span>
                       </button>
@@ -512,7 +528,7 @@ export default function VendorManagement() {
                     setIsAddVendorModalOpen(false);
                     setEditingVendor(null);
                   }}
-                  className="px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded-lg transition-colors cursor-pointer"
                   type="button"
                 >
                   Cancel
@@ -520,7 +536,7 @@ export default function VendorManagement() {
                 <button 
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-600 rounded-lg shadow-sm shadow-primary/20 transition-all disabled:opacity-50"
+                  className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-600 rounded-lg shadow-sm shadow-primary/20 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmitting ? 'Saving...' : (editingVendor ? 'Update Vendor' : 'Add Vendor')}
                 </button>

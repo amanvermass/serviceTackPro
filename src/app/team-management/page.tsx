@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import TableShimmer from '@/components/TableShimmer';
 
 export default function TeamManagement() {
   interface TeamMember {
@@ -20,88 +21,7 @@ export default function TeamManagement() {
     avatar?: string;
   }
 
-  const initialMembers: TeamMember[] = [
-    {
-      id: '1',
-      name: 'John Smith',
-      email: 'john.smith@company.com',
-      role: 'Account Manager',
-      status: 'available',
-      phone: '+1 (555) 123-4567',
-      projects: ['TechCorp Solutions', 'GreenStart Ventures', 'BlueSky Consulting'],
-      workload: 65,
-      permissions: ['Clients', 'Reports'],
-      notifications: ['Email', 'SMS'],
-      avatar: 'https://images.unsplash.com/photo-1584824486509-112e4181ff6b?q=80&w=2940&auto=format&fit=crop'
-    },
-    {
-      id: '2',
-      name: 'Lisa Anderson',
-      email: 'lisa.anderson@company.com',
-      role: 'Technical Lead',
-      status: 'busy',
-      phone: '+1 (555) 234-5678',
-      projects: ['Digital Innovations', 'BlueSky Consulting', 'StartupHub', 'TechWorks', 'CloudEdge'],
-      workload: 92,
-      permissions: ['Domains', 'Hosting', 'Admin'],
-      notifications: ['Email', 'WhatsApp'],
-      avatar: 'https://images.unsplash.com/photo-1584824486509-112e4181ff6b?q=80&w=2940&auto=format&fit=crop'
-    },
-    {
-      id: '3',
-      name: 'Mike Johnson',
-      email: 'mike.johnson@company.com',
-      role: 'Developer',
-      status: 'available',
-      phone: '+1 (555) 345-6789',
-      projects: ['TechCorp Solutions', 'StartupHub', 'GreenStart Ventures', 'Alpha Inc'],
-      workload: 75,
-      permissions: ['Maintenance', 'Hosting'],
-      notifications: ['Email', 'SMS'],
-      avatar: 'https://images.unsplash.com/photo-1584824486509-112e4181ff6b?q=80&w=2940&auto=format&fit=crop'
-    },
-    {
-      id: '4',
-      name: 'Sarah Chen',
-      email: 'sarah.chen@company.com',
-      role: 'UI/UX Designer',
-      status: 'available',
-      phone: '+1 (555) 456-7890',
-      projects: ['GreenStart Ventures', 'Digital Innovations'],
-      workload: 58,
-      permissions: ['Design', 'Clients'],
-      notifications: ['Email'],
-      avatar: 'https://images.unsplash.com/photo-1584824486509-112e4181ff6b?q=80&w=2940&auto=format&fit=crop'
-    },
-    {
-      id: '5',
-      name: 'Alex Rodriguez',
-      email: 'alex.rodriguez@company.com',
-      role: 'Developer',
-      status: 'offline',
-      phone: '+1 (555) 567-8901',
-      projects: ['TechWorks', 'CloudEdge'],
-      workload: 40,
-      permissions: ['Domains', 'Maintenance'],
-      notifications: ['Email'],
-      avatar: 'https://images.unsplash.com/photo-1584824486509-112e4181ff6b?q=80&w=2940&auto=format&fit=crop'
-    },
-    {
-      id: '6',
-      name: 'David Wilson',
-      email: 'david.wilson@company.com',
-      role: 'Project Director',
-      status: 'available',
-      phone: '+1 (555) 678-9012',
-      projects: [],
-      workload: 35,
-      permissions: ['Admin', 'Clients', 'Domains', 'Hosting', 'Maintenance', 'Team', 'Settings'],
-      notifications: ['Email', 'SMS'],
-      avatar: 'https://images.unsplash.com/photo-1584824486509-112e4181ff6b?q=80&w=2940&auto=format&fit=crop'
-    }
-  ];
-
-  const [members, setMembers] = useState<TeamMember[]>(initialMembers);
+  const [members, setMembers] = useState<TeamMember[]>([]);
   const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
@@ -121,13 +41,17 @@ export default function TeamManagement() {
 
   const [teamStats, setTeamStats] = useState<{ totalMembers: number; activeMembers: number; activeProjects: number } | null>(null);
   const [isStatsLoading, setIsStatsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchTeam = useCallback(async () => {
+    setIsLoading(true);
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
       const token = localStorage.getItem('token');
 
       if (!token) {
+        setIsLoading(false);
         return;
       }
 
@@ -173,12 +97,15 @@ export default function TeamManagement() {
           };
         });
 
-        if (apiMembers.length > 0) {
-          setMembers(apiMembers);
-        }
+        setMembers(apiMembers);
+      } else {
+        setMembers([]);
       }
     } catch (error) {
       console.error('Error fetching team members:', error);
+      setMembers([]);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -289,6 +216,16 @@ export default function TeamManagement() {
     return arr;
   }, [filtered, sortKey, sortDir]);
 
+  const itemsPerPage = 10;
+  const totalPages = Math.max(1, Math.ceil(sorted.length / itemsPerPage) || 1);
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * itemsPerPage;
+  const paginated = sorted.slice(startIndex, startIndex + itemsPerPage);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, roleFilter, statusFilter]);
+
   const onSort = (key: 'name' | 'role' | 'projects' | 'workload') => {
     if (sortKey === key) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -305,6 +242,11 @@ export default function TeamManagement() {
     setPanelOpen(true);
   };
 
+  const handleViewMember = (member: TeamMember) => {
+    setSelectedMember(member);
+    setPanelOpen(true);
+  };
+
   const addMemberSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -313,6 +255,7 @@ export default function TeamManagement() {
     const email = (formData.get('memberEmail') as string) || '';
     const phone = (formData.get('memberPhone') as string) || '';
     const roleValue = (formData.get('memberRole') as string) || '';
+    const passwordValue = (formData.get('memberPassword') as string) || '';
 
     if (!name || !email || !roleValue) return;
 
@@ -320,10 +263,9 @@ export default function TeamManagement() {
     const notifSms = formData.get('notif_sms') === 'on';
     const notifWhatsapp = formData.get('notif_whatsapp') === 'on';
 
-    const payload = {
+    const payload: any = {
       name,
       email,
-      password: editingMember ? '12345678' : '123456',
       phone,
       roleId: roleValue,
       notifications: {
@@ -332,6 +274,10 @@ export default function TeamManagement() {
         whatsapp: notifWhatsapp
       }
     };
+
+    if (!editingMember || passwordValue.trim() !== '') {
+      payload.password = passwordValue;
+    }
 
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
@@ -531,156 +477,244 @@ export default function TeamManagement() {
         </div>
 
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th
-                    className="cursor-pointer hover:bg-secondary-100 transition-smooth"
-                    onClick={() => onSort('name')}
-                  >
-                    <div className="flex items-center gap-2">
-                      Team Member
-                      <svg className="w-4 h-4 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
-                      </svg>
-                    </div>
-                  </th>
-                  <th
-                    className="cursor-pointer hover:bg-secondary-100 transition-smooth"
-                    onClick={() => onSort('role')}
-                  >
-                    <div className="flex items-center gap-2">
-                      Role & Permissions
-                      <svg className="w-4 h-4 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
-                      </svg>
-                    </div>
-                  </th>
-                  <th
-                    className="cursor-pointer hover:bg-secondary-100 transition-smooth"
-                    onClick={() => onSort('projects')}
-                  >
-                    <div className="flex items-center gap-2">
-                      Current Projects
-                      <svg className="w-4 h-4 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
-                      </svg>
-                    </div>
-                  </th>
-                  <th>Contact & Notifications</th>
-                  <th className="flex items-center justify-end">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map((m) => (
-                  <tr
-                    key={m.id}
-                    className="cursor-pointer hover:bg-surface-hover transition-smooth"
-                    onClick={(e) => onRowClick(e, m)}
-                  >
-                    <td>
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
-                          <img
-                            src={m.avatar}
-                            alt={m.name}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
-                          <div
-                            className={[
-                              'absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-surface',
-                              m.status === 'available' ? 'bg-success' : m.status === 'busy' ? 'bg-warning' : 'bg-secondary'
-                            ].join(' ')}
-                          />
+          {isLoading ? (
+            <div className="overflow-x-auto">
+              <table className="table">
+                <tbody>
+                  <TableShimmer columns={5} rows={8} />
+                </tbody>
+              </table>
+            </div>
+          ) : sorted.length === 0 ? (
+            <div className="p-12 text-center text-text-secondary">
+              <p className="text-lg font-medium">No team members found</p>
+              <p className="text-sm mt-1">Add a team member to get started.</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th
+                        className="cursor-pointer hover:bg-secondary-100 transition-smooth"
+                        onClick={() => onSort('name')}
+                      >
+                        <div className="flex items-center gap-2">
+                          Team Member
+                          <svg className="w-4 h-4 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                          </svg>
                         </div>
-                        <div>
-                          <p className="font-medium text-text-primary">{m.name}</p>
-                          <p className="text-xs text-text-secondary">{m.email}</p>
+                      </th>
+                      <th
+                        className="cursor-pointer hover:bg-secondary-100 transition-smooth"
+                        onClick={() => onSort('role')}
+                      >
+                        <div className="flex items-center gap-2">
+                          Role & Permissions
+                          <svg className="w-4 h-4 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                          </svg>
                         </div>
-                      </div>
-                    </td>
-                    <td>
-                      <div>
-                        <p className="font-medium text-text-primary">{m.role}</p>
-                        <div className="flex items-center gap-1 mt-1">
-                          {m.permissions.slice(0, 3).map((p, idx) => (
-                            <span key={idx} className={['badge text-xs', p === 'Admin' ? 'badge-success' : p === 'Hosting' || p === 'Maintenance' ? 'badge-warning' : 'badge-primary'].join(' ')}>
-                              {p}
-                            </span>
-                          ))}
+                      </th>
+                      <th
+                        className="cursor-pointer hover:bg-secondary-100 transition-smooth"
+                        onClick={() => onSort('projects')}
+                      >
+                        <div className="flex items-center gap-2">
+                          Current Projects
+                          <svg className="w-4 h-4 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                          </svg>
                         </div>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="space-y-1">
-                        {m.projects.slice(0, 2).map((p, idx) => (
-                          <p key={idx} className="text-sm text-text-primary">{p}</p>
-                        ))}
-                        {m.projects.length > 2 && (
-                          <p className="text-xs text-text-secondary">+{m.projects.length - 2} more projects</p>
-                        )}
-                        {m.projects.length === 2 && (
-                          <p className="text-xs text-text-secondary">2 active projects</p>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      <div>
-                        <p className="text-sm text-text-primary">{m.phone}</p>
-                        <div className="flex items-center gap-1 mt-1">
-                          {m.notifications.map((n, idx) => (
-                            <span
-                              key={idx}
-                              className={[
-                                'badge text-xs',
-                                n === 'WhatsApp' ? 'badge-accent' : n === 'SMS' ? 'badge-success' : 'badge-primary'
-                              ].join(' ')}
+                      </th>
+                      <th>Contact & Notifications</th>
+                      <th className="flex items-center justify-end">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginated.map((m) => (
+                      <tr
+                        key={m.id}
+                        className="hover:bg-surface-hover transition-smooth"
+                      >
+                        <td>
+                          <div className="flex items-center gap-3">
+                            <div className="relative">
+                              {m.avatar ? (
+                                <img
+                                  src={m.avatar}
+                                  alt={m.name}
+                                  className="w-10 h-10 rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-secondary-100 flex items-center justify-center text-sm font-medium text-secondary-800">
+                                  {m.name
+                                    .split(' ')
+                                    .map((n) => n[0])
+                                    .join('')
+                                    .substring(0, 2)
+                                    .toUpperCase()}
+                                </div>
+                              )}
+                              <div
+                                className={[
+                                  'absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-surface',
+                                  m.status === 'available' ? 'bg-success' : m.status === 'busy' ? 'bg-warning' : 'bg-secondary'
+                                ].join(' ')}
+                              />
+                            </div>
+                            <div>
+                              <p className="font-medium text-text-primary">{m.name}</p>
+                              <p className="text-xs text-text-secondary">{m.email}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div>
+                            <p className="font-medium text-text-primary">{m.role}</p>
+                            <div className="flex items-center gap-1 mt-1">
+                              {m.permissions.slice(0, 3).map((p, idx) => (
+                                <span key={idx} className={['badge text-xs', p === 'Admin' ? 'badge-success' : p === 'Hosting' || p === 'Maintenance' ? 'badge-warning' : 'badge-primary'].join(' ')}>
+                                  {p}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="space-y-1">
+                            {m.projects.slice(0, 2).map((p, idx) => (
+                              <p key={idx} className="text-sm text-text-primary">{p}</p>
+                            ))}
+                            {m.projects.length > 2 && (
+                              <p className="text-xs text-text-secondary">+{m.projects.length - 2} more projects</p>
+                            )}
+                            {m.projects.length === 2 && (
+                              <p className="text-xs text-text-secondary">2 active projects</p>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <div>
+                            <p className="text-sm text-text-primary">{m.phone}</p>
+                            <div className="flex items-center gap-1 mt-1">
+                              {m.notifications.map((n, idx) => (
+                                <span
+                                  key={idx}
+                                  className={[
+                                    'badge text-xs',
+                                    n === 'WhatsApp' ? 'badge-accent' : n === 'SMS' ? 'badge-success' : 'badge-primary'
+                                  ].join(' ')}
+                                >
+                                  {n}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="p-2 cursor-pointer rounded-lg hover:bg-surface-hover transition-smooth"
+                              aria-label="Edit team member"
+                              onClick={() => {
+                                setEditingMember(m);
+                                setNewMember({
+                                  name: m.name,
+                                  email: m.email,
+                                  phone: m.phone,
+                                  role: m.roleId || m.role
+                                });
+                                setAddOpen(true);
+                              }}
                             >
-                              {n}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    </td>
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                              <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                              </svg>
+                            </button>
+                            <button
+                              className="p-2 cursor-pointer rounded-lg hover:bg-error-50 transition-smooth"
+                              aria-label="Delete team member"
+                              onClick={() => {
+                                setMembers((prev) => prev.filter((x) => x.id !== m.id));
+                              }}
+                            >
+                              <svg className="w-5 h-5 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                              </svg>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="px-6 py-4 border-t border-border flex flex-col sm:flex-row items-center justify-center gap-4 bg-surface-50">
+                <div className="text-sm text-text-secondary">
+                  Showing Page <span className="font-medium text-text-primary">{safePage}</span> of <span className="font-medium text-text-primary">{totalPages}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                    disabled={safePage === 1}
+                    className="btn btn-outline btn-sm h-8 px-3"
+                  >
+                    Previous
+                  </button>
+
+                  <div className="flex items-center gap-1">
+                    {(() => {
+                      const pages: (number | string)[] = [];
+                      if (totalPages <= 3) {
+                        for (let i = 1; i <= totalPages; i++) pages.push(i);
+                      } else {
+                        let start = Math.max(1, safePage - 1);
+                        let end = Math.min(totalPages, start + 2);
+
+                        if (end === totalPages) {
+                          start = Math.max(1, end - 2);
+                        }
+
+                        if (start > 1) pages.push('...');
+                        for (let i = start; i <= end; i++) pages.push(i);
+                        if (end < totalPages) pages.push('...');
+                      }
+
+                      return pages.map((page, index) => (
                         <button
-                          className="p-2 rounded-lg hover:bg-surface-hover transition-smooth"
-                          aria-label="Edit team member"
-                          onClick={() => {
-                            setEditingMember(m);
-                            setNewMember({
-                              name: m.name,
-                              email: m.email,
-                              phone: m.phone,
-                              role: m.roleId || m.role
-                            });
-                            setAddOpen(true);
-                          }}
+                          key={index}
+                          onClick={() => (typeof page === 'number' ? setCurrentPage(page) : null)}
+                          disabled={typeof page !== 'number'}
+                          className={`h-8 min-w-[32px] px-2 rounded-lg text-sm font-medium transition-colors
+                            ${
+                              page === safePage
+                                ? 'bg-primary text-white shadow-sm'
+                                : typeof page === 'number'
+                                ? 'hover:bg-surface-hover text-text-secondary hover:text-text-primary'
+                                : 'text-text-tertiary cursor-default'
+                            }`}
                         >
-                          <svg className="w-5 h-5 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                          </svg>
+                          {page}
                         </button>
-                        <button
-                          className="p-2 rounded-lg hover:bg-error-50 transition-smooth"
-                          aria-label="Delete team member"
-                          onClick={() => {
-                            setMembers((prev) => prev.filter((x) => x.id !== m.id));
-                          }}
-                        >
-                          <svg className="w-5 h-5 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      ));
+                    })()}
+                  </div>
+
+                  <button
+                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                    disabled={safePage === totalPages}
+                    className="btn btn-outline btn-sm h-8 px-3"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
 
@@ -888,7 +922,7 @@ export default function TeamManagement() {
                       id="memberPhone"
                       name="memberPhone"
                       className="input"
-                      placeholder="+1 (555) 123-4567"
+                      placeholder="9876543210"
                       value={newMember.phone}
                       onChange={(e) => setNewMember((s) => ({ ...s, phone: e.target.value }))}
                     />
@@ -910,6 +944,19 @@ export default function TeamManagement() {
                         </option>
                       ))}
                     </select>
+                  </div>
+                  <div>
+                    <label htmlFor="memberPassword" className="input-label">
+                      {editingMember ? 'Password (optional)' : 'Password *'}
+                    </label>
+                    <input
+                      type="password"
+                      id="memberPassword"
+                      name="memberPassword"
+                      className="input"
+                      placeholder={editingMember ? 'Enter new password (leave blank to keep current)' : 'Enter password'}
+                      {...(!editingMember ? { required: true } : {})}
+                    />
                   </div>
                 </div>
 
