@@ -54,14 +54,31 @@ export default function Header() {
         if (response.ok) {
           const data = await response.json();
           const items = Array.isArray(data) ? data : data.data || [];
-          const mapped: NotificationType[] = items.map((item: any) => ({
-            id: String(item.id || item._id),
-            title: item.title || '',
-            message: item.message || '',
-            type: (item.type as NotificationType['type']) || 'info',
-            time: item.time || '',
-            read: Boolean(item.read)
-          }));
+          const mapped: NotificationType[] = items.map((item: any) => {
+            const rawIsRead =
+              item.isRead ??
+              item.isread ??
+              item.is_read ??
+              item.read ??
+              item.is_read_notification;
+
+            const read =
+              typeof rawIsRead === 'boolean'
+                ? rawIsRead
+                : rawIsRead === 1 ||
+                  rawIsRead === '1' ||
+                  rawIsRead === 'true' ||
+                  rawIsRead === 'TRUE';
+
+            return {
+              id: String(item.id || item._id),
+              title: item.title || '',
+              message: item.message || '',
+              type: (item.type as NotificationType['type']) || 'info',
+              time: item.time || '',
+              read
+            };
+          });
           setNotifications(mapped);
         }
       } catch (error) {
@@ -96,8 +113,18 @@ export default function Header() {
       }
     };
 
-    fetchNotifications();
-    fetchUnreadCount();
+    const run = () => {
+      fetchNotifications();
+      fetchUnreadCount();
+    };
+
+    run();
+
+    const intervalId = setInterval(run, 15000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
   }, []);
 
   const handleNotificationClick = async (notification: NotificationType) => {
@@ -133,7 +160,7 @@ export default function Header() {
       if (!token) return;
 
       const response = await fetch(`${baseUrl}/api/notifications/read-all`, {
-        method: 'POST',
+        method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
           'x-auth-token': token

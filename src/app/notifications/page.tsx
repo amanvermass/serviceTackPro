@@ -106,7 +106,7 @@ export default function Notifications() {
       if (!token) return;
 
       const response = await fetch(`${baseUrl}/api/notifications/read-all`, {
-        method: 'POST',
+        method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
           'x-auth-token': token
