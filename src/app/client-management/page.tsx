@@ -19,6 +19,8 @@ export default function ClientManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const itemsPerPage = 10;
+  const [hoveredServices, setHoveredServices] = useState<Client['activeServicesList'] | null>(null);
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
 
   const fetchClients = async (search = '', page = 1) => {
     setLoading(true);
@@ -67,6 +69,28 @@ export default function ClientManagement() {
             .substring(0, 2)
             .toUpperCase();
 
+          const activeDomains: string[] = item.activeServices?.domains || [];
+          const activeHostingProviders: string[] = item.activeServices?.hostingProviders || [];
+
+          const domainCount = activeDomains.length || item.services?.domains || 0;
+          const hostingCount = activeHostingProviders.length || item.services?.hosting || 0;
+          const maintenanceFlag = item.services?.maintenance || false;
+
+          const activeServicesList = [
+            ...activeDomains.map((domain: string, index: number) => ({
+              id: `domain-${item._id}-${index}`,
+              name: domain,
+              type: 'Domain' as const,
+              status: 'active' as const
+            })),
+            ...activeHostingProviders.map((provider: string, index: number) => ({
+              id: `hosting-${item._id}-${index}`,
+              name: provider,
+              type: 'Hosting' as const,
+              status: 'active' as const
+            }))
+          ];
+
           return {
             id: item._id,
             companyName: companyName,
@@ -91,9 +115,9 @@ export default function ClientManagement() {
               country: ''
             },
             services: {
-              domains: item.services?.domains || 0,
-              hosting: item.services?.hosting || 0,
-              maintenance: item.services?.maintenance || false
+              domains: domainCount,
+              hosting: hostingCount,
+              maintenance: maintenanceFlag
             },
             billing: {
               totalSpent: 0,
@@ -102,7 +126,7 @@ export default function ClientManagement() {
               status: 'good'
             },
             recentActivity: [],
-            activeServicesList: []
+            activeServicesList
           };
         });
         setClients(mappedClients);
@@ -338,10 +362,37 @@ export default function ClientManagement() {
                       </div>
                     </td>
                     <td>
-                      <div className="flex flex-wrap gap-2">
-                        {client.services.domains > 0 && <span className="badge badge-primary">{client.services.domains} Domains</span>}
-                        {client.services.hosting > 0 && <span className="badge badge-success">{client.services.hosting} Hosting</span>}
-                        {client.services.maintenance && <span className="badge badge-warning">Maintenance</span>}
+                      <div
+                        className="relative inline-flex"
+                        onMouseEnter={(e) => {
+                          if (client.activeServicesList.length === 0) return;
+                          setHoveredServices(client.activeServicesList);
+                          setTooltipPos({ x: e.clientX, y: e.clientY });
+                        }}
+                        onMouseMove={(e) => {
+                          if (!hoveredServices) return;
+                          setTooltipPos({ x: e.clientX, y: e.clientY });
+                        }}
+                        onMouseLeave={() => {
+                          setHoveredServices(null);
+                          setTooltipPos(null);
+                        }}
+                      >
+                        <div className="flex flex-wrap gap-2">
+                          {client.services.domains > 0 && (
+                            <span className="badge badge-primary">
+                              {client.services.domains} Domains
+                            </span>
+                          )}
+                          {client.services.hosting > 0 && (
+                            <span className="badge badge-success">
+                              {client.services.hosting} Hosting
+                            </span>
+                          )}
+                          {client.services.maintenance && (
+                            <span className="badge badge-warning">Maintenance</span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td>
@@ -387,7 +438,35 @@ export default function ClientManagement() {
               </tbody>
             </table>
           </div>
-          
+          {hoveredServices && tooltipPos && (
+            <div
+              className="fixed z-50 bg-surface border border-border rounded-lg shadow-lg p-3 text-xs text-text-secondary"
+              style={{
+                top: tooltipPos.y + 12,
+                left: tooltipPos.x + 12,
+                maxWidth: '320px',
+              }}
+            >
+              <ul className="space-y-1">
+                {hoveredServices.map((service) => (
+                  <li key={service.id} className="flex items-center justify-between gap-2">
+                    <span className="truncate">{service.name}</span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                        service.type === 'Domain'
+                          ? 'bg-primary-50 text-primary-700'
+                          : service.type === 'Hosting'
+                          ? 'bg-success-50 text-success-700'
+                          : 'bg-warning-50 text-warning-700'
+                      }`}
+                    >
+                      {service.type}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {/* Pagination */}
           <div className="px-6 py-4 border-t border-border flex flex-col sm:flex-row items-center justify-center gap-4 bg-surface-50">
             {/* <div className="text-sm text-text-secondary">

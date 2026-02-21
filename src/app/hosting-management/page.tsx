@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Tooltip from '@/components/Tooltip';
-import { toast } from 'react-hot-toast';
+import toastConfig from '@/components/CustomToast';
 import Footer from '@/components/Footer';
 import TableShimmer from '@/components/TableShimmer';
 
@@ -337,7 +337,7 @@ export default function HostingManagement() {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
       const token = localStorage.getItem('token');
       if (!token) {
-        toast.error('You must be logged in to delete hosting accounts');
+        toastConfig.error('You must be logged in to delete hosting accounts');
         return;
       }
 
@@ -350,14 +350,14 @@ export default function HostingManagement() {
       });
 
       if (response.ok) {
-        toast.success('Hosting account deleted successfully');
+        toastConfig.success('Hosting account deleted successfully');
         setHostingAccounts(prev => prev.filter(acc => acc.id !== accountId));
       } else {
-        toast.error('Failed to delete hosting account');
+        toastConfig.error('Failed to delete hosting account');
       }
     } catch (error) {
       console.error('Error deleting hosting account:', error);
-      toast.error('Error deleting hosting account');
+      toastConfig.error('Error deleting hosting account');
     }
   };
 
@@ -381,7 +381,7 @@ export default function HostingManagement() {
       const token = localStorage.getItem('token');
 
       if (!token) {
-        toast.error('You must be logged in to export hosting data');
+        toastConfig.error('You must be logged in to export hosting data');
         return;
       }
 
@@ -403,7 +403,7 @@ export default function HostingManagement() {
       });
 
       if (!response.ok) {
-        toast.error('Failed to export hosting data');
+        toastConfig.error('Failed to export hosting data');
         return;
       }
 
@@ -417,10 +417,10 @@ export default function HostingManagement() {
       link.remove();
       window.URL.revokeObjectURL(downloadUrl);
 
-      toast.success('Hosting data exported successfully');
+      toastConfig.success('Hosting data exported successfully');
     } catch (error) {
       console.error('Error exporting hosting data:', error);
-      toast.error('An error occurred while exporting hosting data');
+      toastConfig.error('An error occurred while exporting hosting data');
     } finally {
       setIsExporting(false);
     }
@@ -439,7 +439,7 @@ export default function HostingManagement() {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
       const token = localStorage.getItem('token');
       if (!token) {
-        toast.error('You must be logged in to renew hosting');
+        toastConfig.error('You must be logged in to renew hosting');
         return;
       }
 
@@ -461,17 +461,17 @@ export default function HostingManagement() {
       const data = await response.json().catch(() => null);
 
       if (response.ok) {
-        toast.success('Hosting renewed successfully');
+        toastConfig.success('Hosting renewed successfully');
         setIsRenewModalOpen(false);
         setRenewAccount(null);
         fetchHostingAccounts(currentPage);
       } else {
         const message = data && (data.message || data.msg);
-        toast.error(message || 'Failed to renew hosting');
+        toastConfig.error(message || 'Failed to renew hosting');
       }
     } catch (error) {
       console.error('Error renewing hosting:', error);
-      toast.error('An error occurred while renewing hosting');
+      toastConfig.error('An error occurred while renewing hosting');
     }
   };
 
@@ -482,7 +482,7 @@ export default function HostingManagement() {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
       const token = localStorage.getItem('token');
       if (!token) {
-        toast.error('You must be logged in to view expiring hosting');
+        toastConfig.error('You must be logged in to view expiring hosting');
         setExpiringHosting([]);
         setExpiredHosting([]);
         setIsExpiringLoading(false);
@@ -502,13 +502,13 @@ export default function HostingManagement() {
         setExpiringHosting(Array.isArray(data.expiring) ? data.expiring : []);
         setExpiredHosting(Array.isArray(data.expired) ? data.expired : []);
       } else {
-        toast.error('Failed to load expiring hosting');
+        toastConfig.error('Failed to load expiring hosting');
         setExpiringHosting([]);
         setExpiredHosting([]);
       }
     } catch (error) {
       console.error('Error fetching expiring hosting:', error);
-      toast.error('Error fetching expiring hosting');
+      toastConfig.error('Error fetching expiring hosting');
       setExpiringHosting([]);
       setExpiredHosting([]);
     } finally {
@@ -523,7 +523,7 @@ export default function HostingManagement() {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL as string;
       const token = localStorage.getItem('token');
       if (!token) {
-        toast.error('You must be logged in to send notifications');
+        toastConfig.error('You must be logged in to send notifications');
         setIsSendingNotifications(false);
         return;
       }
@@ -539,13 +539,13 @@ export default function HostingManagement() {
       const result = await response.json().catch(() => ({}));
 
       if (response.ok) {
-        toast.success(result.message || 'Renewal notifications sent successfully');
+        toastConfig.success(result.message || 'Renewal notifications sent successfully');
       } else {
-        toast.error(result.message || 'Failed to send renewal notifications');
+        toastConfig.error(result.message || 'Failed to send renewal notifications');
       }
     } catch (error) {
       console.error('Error sending renewal notifications:', error);
-      toast.error('Error sending renewal notifications');
+      toastConfig.error('Error sending renewal notifications');
     } finally {
       setIsSendingNotifications(false);
     }
@@ -578,7 +578,7 @@ export default function HostingManagement() {
     try {
        const token = localStorage.getItem('token');
        if (!token) {
-         toast.error('You must be logged in to manage hosting accounts');
+         toastConfig.error('You must be logged in to manage hosting accounts');
          setIsSubmitting(false);
          return;
        }
@@ -649,18 +649,20 @@ export default function HostingManagement() {
 
          if (editingAccount) {
             setHostingAccounts(prev => prev.map(a => a.id === mappedSavedAccount.id ? mappedSavedAccount : a));
-            toast.success('Hosting account updated successfully');
+            toastConfig.success('Hosting account updated successfully');
          } else {
             setHostingAccounts(prev => [...prev, mappedSavedAccount]);
-            toast.success('Hosting account added successfully');
+            toastConfig.success('Hosting account added successfully');
          }
          handleCloseModal();
        } else {
-         throw new Error('Failed to save hosting account');
+         const errorData = await response.json().catch(() => null);
+         const message = errorData && (errorData.message || errorData.msg);
+         toastConfig.error(message || 'Failed to save hosting account');
        }
     } catch (error) {
       console.error('Error saving hosting:', error);
-      toast.error('Failed to save hosting account');
+      toastConfig.error('Failed to save hosting account');
     } finally {
       setIsSubmitting(false);
     }
@@ -703,7 +705,7 @@ export default function HostingManagement() {
           </div>
         </div>
 
-        {isAlertVisible && (
+        {(isAlertVisible && ((expiringSoonCount ?? 0) > 0 || (expiredCount ?? 0) > 0)) && (
           <div id="hostingExpiryAlertBanner" className="card mb-6 border-l-4 border-warning bg-warning-50">
             <div className="flex items-start gap-4">
               <div className="flex-shrink-0">

@@ -673,7 +673,7 @@ export default function DomainManagement() {
         </div>
 
         {/* Alert Banner for Expiring Domains */}
-        {isAlertVisible && (
+        {(isAlertVisible && ((expiringSoonCount ?? 0) > 0 || (expiredCount ?? 0) > 0)) && (
           <div id="expiryAlertBanner" className="card mb-6 border-l-4 border-warning bg-warning-50">
             <div className="flex items-start gap-4">
               <div className="flex-shrink-0">
