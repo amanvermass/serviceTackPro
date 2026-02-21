@@ -947,7 +947,9 @@ export default function TeamManagement() {
               <form className="p-6 space-y-6" onSubmit={addMemberSubmit}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="memberName" className="input-label">Full Name *</label>
+                    <label htmlFor="memberName" className="input-label">
+                      Full Name <span className="text-error">*</span>
+                    </label>
                     <input
                       type="text"
                       id="memberName"
@@ -960,7 +962,9 @@ export default function TeamManagement() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="memberEmail" className="input-label">Email *</label>
+                    <label htmlFor="memberEmail" className="input-label">
+                      Email <span className="text-error">*</span>
+                    </label>
                     <input
                       type="email"
                       id="memberEmail"
@@ -976,7 +980,7 @@ export default function TeamManagement() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="memberPhone" className="input-label">Phone</label>
+                    <label htmlFor="memberPhone" className="input-label">Phone <span className="text-error">*</span></label>
                     <input
                       type="tel"
                       id="memberPhone"
@@ -988,7 +992,9 @@ export default function TeamManagement() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="memberRole" className="input-label">Role *</label>
+                    <label htmlFor="memberRole" className="input-label">
+                      Role <span className="text-error">*</span>
+                    </label>
                     <select
                       id="memberRole"
                       name="memberRole"
@@ -1007,7 +1013,13 @@ export default function TeamManagement() {
                   </div>
                   <div>
                     <label htmlFor="memberPassword" className="input-label">
-                      {editingMember ? 'Password (optional)' : 'Password *'}
+                      {editingMember ? (
+                        'Password (optional)'
+                      ) : (
+                        <>
+                          Password <span className="text-error">*</span>
+                        </>
+                      )}
                     </label>
                     <input
                       type="password"

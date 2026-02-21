@@ -9,16 +9,18 @@ import TableShimmer from '@/components/TableShimmer';
 import { toast } from 'react-hot-toast';
 
 // Helper Component: MultiSelect
-const MultiSelect = ({ 
-  label, 
-  options, 
-  selected, 
-  onChange 
-}: { 
-  label: string; 
-  options: { value: string; label: string }[]; 
-  selected: string[]; 
-  onChange: (value: string[]) => void; 
+const MultiSelect = ({
+  label,
+  options,
+  selected,
+  onChange,
+  required = false
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  selected: string[];
+  onChange: (value: string[]) => void;
+  required?: boolean;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -43,7 +45,10 @@ const MultiSelect = ({
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <label className="input-label">{label}</label>
+      <label className="input-label">
+        {label}
+        {required && <span className="text-error"> *</span>}
+      </label>
       <div 
         className="input flex items-center justify-between cursor-pointer bg-white pr-2"
         onClick={() => setIsOpen(!isOpen)}
@@ -788,7 +793,7 @@ export default function MaintenanceModule() {
                         </svg>
                       </div>
                     </th>
-                    <th
+                    {/* <th
                       className="cursor-pointer hover:bg-secondary-100 transition-smooth"
                       onClick={() => handleSort('changes')}
                     >
@@ -812,7 +817,7 @@ export default function MaintenanceModule() {
                           />
                         </svg>
                       </div>
-                    </th>
+                    </th> */}
                     <th>Assigned Team</th>
                     <th>Status</th>
                     <th className="flex items-center justify-end">Actions</th>
@@ -861,7 +866,7 @@ export default function MaintenanceModule() {
                           </p>
                         </div>
                       </td>
-                      <td>
+                      {/* <td>
                         <div className="flex items-center gap-2">
                           <div className="flex items-center gap-1">
                             <span
@@ -882,7 +887,7 @@ export default function MaintenanceModule() {
                             </span>
                           </div>
                         </div>
-                      </td>
+                      </td> */}
                       <td>
                         <div className="flex flex-wrap gap-1">
                           {getTeamMembers(project.team).map((member) => (
@@ -1075,7 +1080,9 @@ export default function MaintenanceModule() {
             <form className="p-6 space-y-6" onSubmit={handleSaveProject}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="clientName" className="input-label">Client</label>
+                  <label htmlFor="clientName" className="input-label">
+                    Client <span className="text-error">*</span>
+                  </label>
                   <select
                     id="clientName"
                     name="clientName"
@@ -1094,7 +1101,9 @@ export default function MaintenanceModule() {
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="projectName" className="input-label">Project Name</label>
+                  <label htmlFor="projectName" className="input-label">
+                    Project Name <span className="text-error">*</span>
+                  </label>
                   <input 
                     type="text" 
                     id="projectName" 
@@ -1109,7 +1118,9 @@ export default function MaintenanceModule() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="startDate" className="input-label">AMC Start Date</label>
+                  <label htmlFor="startDate" className="input-label">
+                    AMC Start Date <span className="text-error">*</span>
+                  </label>
                   <input 
                     type="date" 
                     id="startDate" 
@@ -1125,7 +1136,9 @@ export default function MaintenanceModule() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="endDate" className="input-label">AMC End Date</label>
+                  <label htmlFor="endDate" className="input-label">
+                    AMC End Date <span className="text-error">*</span>
+                  </label>
                   <input 
                     type="date" 
                     id="endDate" 
@@ -1155,7 +1168,9 @@ export default function MaintenanceModule() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="amcValue" className="input-label">AMC Value</label>
+                  <label htmlFor="amcValue" className="input-label">
+                    AMC Value <span className="text-error">*</span>
+                  </label>
                   <input 
                     type="number" 
                     id="amcValue" 
@@ -1168,7 +1183,9 @@ export default function MaintenanceModule() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="billingFrequency" className="input-label">Billing Frequency</label>
+                  <label htmlFor="billingFrequency" className="input-label">
+                    Billing Frequency <span className="text-error">*</span>
+                  </label>
                   <select 
                     id="billingFrequency" 
                     name="billingFrequency"
@@ -1189,7 +1206,9 @@ export default function MaintenanceModule() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="status" className="input-label">Status</label>
+                  <label htmlFor="status" className="input-label">
+                    Status <span className="text-error">*</span>
+                  </label>
                   <select 
                     id="status" 
                     name="status"
@@ -1234,6 +1253,7 @@ export default function MaintenanceModule() {
               <div>
                 <MultiSelect
                   label="Assign Team Members"
+                  required
                   options={teamMembers.map((member) => ({
                     value: member.id,
                     label: member.name

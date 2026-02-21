@@ -15,6 +15,39 @@ type NotificationType = {
   read: boolean;
 };
 
+type NavPermissions = {
+  clients?: boolean;
+  domains?: boolean;
+  hosting?: boolean;
+  maintenance?: boolean;
+  team?: boolean;
+  settings?: boolean;
+};
+
+type NavAuthStorage = {
+  user?: {
+    permissions?: NavPermissions;
+  };
+};
+
+const getNavPermissions = (): NavPermissions => {
+  if (typeof window === 'undefined') return {};
+
+  const keys = ['auth', 'user', 'userData', 'userdata'];
+  for (const key of keys) {
+    const raw = localStorage.getItem(key);
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(raw) as NavAuthStorage;
+      if (parsed && typeof parsed === 'object' && parsed.user?.permissions) {
+        return parsed.user.permissions;
+      }
+    } catch {
+    }
+  }
+  return {};
+};
+
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
@@ -24,6 +57,7 @@ export default function Header() {
   const [unreadCount, setUnreadCount] = useState(0);
   const profileRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const [permissions, setPermissions] = useState<NavPermissions>({});
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -36,6 +70,11 @@ export default function Header() {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const perms = getNavPermissions();
+    setPermissions(perms);
   }, []);
 
   useEffect(() => {
@@ -238,43 +277,55 @@ export default function Header() {
               <Link href="/dashboard" className={`px-4 py-2 rounded-lg text-sm font-medium transition-smooth ${isActive('/dashboard')}`}>
                 Dashboard
               </Link>
-              <Link href="/client-management" className={`px-4 py-2 rounded-lg text-sm font-medium transition-smooth ${isActive('/client-management')}`}>
-                Clients
-              </Link>
+              {permissions.clients !== false && (
+                <Link href="/client-management" className={`px-4 py-2 rounded-lg text-sm font-medium transition-smooth ${isActive('/client-management')}`}>
+                  Clients
+                </Link>
+              )}
               
               {/* Domains Dropdown */}
-              <div className="relative group">
-                <button className={`px-4 py-2 rounded-lg text-sm font-medium transition-smooth flex items-center gap-1 cursor-default ${isParentActive('/domain-management')}`}>
-                  Domains
-                  <svg className="w-4 h-4 transition-transform group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                <div className="absolute top-full left-0 mt-1 w-48 bg-surface border border-border rounded-lg shadow-lg py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-left">
-                  <Link href="/domain-management" className={`block px-4 py-2 text-sm transition-colors ${pathname === '/domain-management' ? 'bg-primary-50 text-primary-700' : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary'}`}>
-                    All Domains
-                  </Link>
-                  <Link href="/domain-management/vendors" className={`block px-4 py-2 text-sm transition-colors ${pathname === '/domain-management/vendors' ? 'bg-primary-50 text-primary-700' : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary'}`}>
-                    Vendors
-                  </Link>
+              {permissions.domains !== false && (
+                <div className="relative group">
+                  <button className={`px-4 py-2 rounded-lg text-sm font-medium transition-smooth flex items-center gap-1 cursor-default ${isParentActive('/domain-management')}`}>
+                    Domains
+                    <svg className="w-4 h-4 transition-transform group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  <div className="absolute top-full left-0 mt-1 w-48 bg-surface border border-border rounded-lg shadow-lg py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-left">
+                    <Link href="/domain-management" className={`block px-4 py-2 text-sm transition-colors ${pathname === '/domain-management' ? 'bg-primary-50 text-primary-700' : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary'}`}>
+                      All Domains
+                    </Link>
+                    <Link href="/domain-management/vendors" className={`block px-4 py-2 text-sm transition-colors ${pathname === '/domain-management/vendors' ? 'bg-primary-50 text-primary-700' : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary'}`}>
+                      Vendors
+                    </Link>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <Link href="/hosting-management" className={`px-4 py-2 rounded-lg text-sm font-medium transition-smooth ${isActive('/hosting-management')}`}>
-                Hosting
-              </Link>
-              <Link href="/maintenance-module" className={`px-4 py-2 rounded-lg text-sm font-medium transition-smooth ${isActive('/maintenance-module')}`}>
-                Maintenance
-              </Link>
+              {permissions.hosting !== false && (
+                <Link href="/hosting-management" className={`px-4 py-2 rounded-lg text-sm font-medium transition-smooth ${isActive('/hosting-management')}`}>
+                  Hosting
+                </Link>
+              )}
+              {permissions.maintenance !== false && (
+                <Link href="/maintenance-module" className={`px-4 py-2 rounded-lg text-sm font-medium transition-smooth ${isActive('/maintenance-module')}`}>
+                  Maintenance
+                </Link>
+              )}
               <Link href="/backups" className={`px-4 py-2 rounded-lg text-sm font-medium transition-smooth ${isActive('/backups')}`}>
                 Backups
               </Link>
-              <Link href="/team-management" className={`px-4 py-2 rounded-lg text-sm font-medium transition-smooth ${isActive('/team-management')}`}>
-                Team
-              </Link>
-              <Link href="/settings" className={`px-4 py-2 rounded-lg text-sm font-medium transition-smooth ${isActive('/settings')}`}>
-                Settings
-              </Link>
+              {permissions.team !== false && (
+                <Link href="/team-management" className={`px-4 py-2 rounded-lg text-sm font-medium transition-smooth ${isActive('/team-management')}`}>
+                  Team
+                </Link>
+              )}
+              {permissions.settings !== false && (
+                <Link href="/settings" className={`px-4 py-2 rounded-lg text-sm font-medium transition-smooth ${isActive('/settings')}`}>
+                  Settings
+                </Link>
+              )}
             </nav>
 
             <div className="flex items-center gap-3 pl-6 border-l border-border">
@@ -423,27 +474,41 @@ export default function Header() {
           <Link href="/dashboard" className={`px-4 py-2 rounded-lg text-sm font-medium ${isActive('/dashboard')}`}>
             Dashboard
           </Link>
-          <Link href="/client-management" className={`px-4 py-2 rounded-lg text-sm font-medium ${isActive('/client-management')}`}>
-            Clients
-          </Link>
-          <Link href="/domain-management" className={`px-4 py-2 rounded-lg text-sm font-medium ${isActive('/domain-management')}`}>
-            Domains
-          </Link>
-          <Link href="/domain-management/vendors" className={`px-4 py-2 rounded-lg text-sm font-medium ${isActive('/domain-management/vendors')} ml-4 border-l-2 border-border`}>
-            Vendors
-          </Link>
-          <Link href="/hosting-management" className={`px-4 py-2 rounded-lg text-sm font-medium ${isActive('/hosting-management')}`}>
-            Hosting
-          </Link>
-          <Link href="/maintenance-module" className={`px-4 py-2 rounded-lg text-sm font-medium ${isActive('/maintenance-module')}`}>
-            Maintenance
-          </Link>
-          <Link href="/team-management" className={`px-4 py-2 rounded-lg text-sm font-medium ${isActive('/team-management')}`}>
-            Team
-          </Link>
-          <Link href="/settings" className={`px-4 py-2 rounded-lg text-sm font-medium ${isActive('/settings')}`}>
-            Settings
-          </Link>
+          {permissions.clients !== false && (
+            <Link href="/client-management" className={`px-4 py-2 rounded-lg text-sm font-medium ${isActive('/client-management')}`}>
+              Clients
+            </Link>
+          )}
+          {permissions.domains !== false && (
+            <>
+              <Link href="/domain-management" className={`px-4 py-2 rounded-lg text-sm font-medium ${isActive('/domain-management')}`}>
+                Domains
+              </Link>
+              <Link href="/domain-management/vendors" className={`px-4 py-2 rounded-lg text-sm font-medium ${isActive('/domain-management/vendors')} ml-4 border-l-2 border-border`}>
+                Vendors
+              </Link>
+            </>
+          )}
+          {permissions.hosting !== false && (
+            <Link href="/hosting-management" className={`px-4 py-2 rounded-lg text-sm font-medium ${isActive('/hosting-management')}`}>
+              Hosting
+            </Link>
+          )}
+          {permissions.maintenance !== false && (
+            <Link href="/maintenance-module" className={`px-4 py-2 rounded-lg text-sm font-medium ${isActive('/maintenance-module')}`}>
+              Maintenance
+            </Link>
+          )}
+          {permissions.team !== false && (
+            <Link href="/team-management" className={`px-4 py-2 rounded-lg text-sm font-medium ${isActive('/team-management')}`}>
+              Team
+            </Link>
+          )}
+          {permissions.settings !== false && (
+            <Link href="/settings" className={`px-4 py-2 rounded-lg text-sm font-medium ${isActive('/settings')}`}>
+              Settings
+            </Link>
+          )}
         </nav>
       </div>
     </header>

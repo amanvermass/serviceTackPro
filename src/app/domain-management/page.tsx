@@ -949,7 +949,7 @@ export default function DomainManagement() {
                       </svg>
                     </div>
                   </th>
-                  <th className="w-16">Actions</th>
+                  <th className="flex items-center justify-end">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1025,12 +1025,6 @@ export default function DomainManagement() {
                     <td>
                       <div className="flex items-center gap-1">
                         <span className="text-text-primary font-medium">${domain.cost.toFixed(2)}</span>
-                        {domain.autoRenew && (
-                          <svg className="w-4 h-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <title>Auto-renew enabled</title>
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                        )}
                       </div>
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
@@ -1389,7 +1383,9 @@ export default function DomainManagement() {
               <div className="p-6 overflow-y-auto">
                 <form id="addDomainForm" className="space-y-4" onSubmit={handleSaveDomain}>
                   <div>
-                    <label htmlFor="domainName" className="input-label">Domain Name</label>
+                    <label htmlFor="domainName" className="input-label">
+                      Domain Name <span className="text-error">*</span>
+                    </label>
                     <input 
                       type="text" 
                       id="domainName" 
@@ -1401,7 +1397,9 @@ export default function DomainManagement() {
                   </div>
                   
                   <div>
-                    <label htmlFor="clientSelect" className="input-label">Client</label>
+                    <label htmlFor="clientSelect" className="input-label">
+                      Client <span className="text-error">*</span>
+                    </label>
                     <select 
                       id="clientSelect" 
                       className="input"
@@ -1418,7 +1416,9 @@ export default function DomainManagement() {
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="vendorSelect" className="input-label">Vendor</label>
+                      <label htmlFor="vendorSelect" className="input-label">
+                        Vendor <span className="text-error">*</span>
+                      </label>
                       <select 
                         name="vendor"
                         id="vendorSelect" 
@@ -1432,7 +1432,9 @@ export default function DomainManagement() {
                       </select>
                     </div>
                     <div>
-                      <label htmlFor="expiryDate" className="input-label">Expiry Date</label>
+                      <label htmlFor="expiryDate" className="input-label">
+                        Expiry Date <span className="text-error">*</span>
+                      </label>
                       <input 
                         type="date" 
                         id="expiryDate" 
@@ -1445,7 +1447,9 @@ export default function DomainManagement() {
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="cost" className="input-label">Annual Cost ($)</label>
+                      <label htmlFor="cost" className="input-label">
+                        Annual Cost ($) <span className="text-error">*</span>
+                      </label>
                       <input 
                         type="number" 
                         id="cost" 
@@ -1457,7 +1461,9 @@ export default function DomainManagement() {
                       />
                     </div>
                     <div>
-                      <label htmlFor="purchasedBy" className="input-label">Purchased By</label>
+                      <label htmlFor="purchasedBy" className="input-label">
+                        Purchased By <span className="text-error">*</span>
+                      </label>
                       <select
                         id="purchasedBy"
                         name="purchasedBy"

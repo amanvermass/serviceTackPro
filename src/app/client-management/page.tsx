@@ -540,7 +540,9 @@ export default function ClientManagement() {
               }}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="companyName" className="input-label">Company Name *</label>
+                    <label htmlFor="companyName" className="input-label">
+                      Company Name <span className="text-error">*</span>
+                    </label>
                     <input 
                       type="text" 
                       id="companyName" 
@@ -566,7 +568,9 @@ export default function ClientManagement() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="contactName" className="input-label">Primary Contact Name *</label>
+                    <label htmlFor="contactName" className="input-label">
+                      Primary Contact Name <span className="text-error">*</span>
+                    </label>
                     <input 
                       type="text" 
                       id="contactName" 
@@ -578,7 +582,9 @@ export default function ClientManagement() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="contactEmail" className="input-label">Email *</label>
+                    <label htmlFor="contactEmail" className="input-label">
+                      Email <span className="text-error">*</span>
+                    </label>
                     <input 
                       type="email" 
                       id="contactEmail" 
@@ -593,7 +599,7 @@ export default function ClientManagement() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="contactPhone" className="input-label">Phone</label>
+                    <label htmlFor="contactPhone" className="input-label">Phone <span className="text-error">*</span></label>
                     <input 
                       type="tel" 
                       id="contactPhone" 
@@ -604,7 +610,7 @@ export default function ClientManagement() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="clientStatus" className="input-label">Status</label>
+                    <label htmlFor="clientStatus" className="input-label">Status <span className="text-error">*</span></label>
                     <select id="clientStatus" name="clientStatus" className="input" defaultValue={editingClient?.status || 'active'}>
                       <option value="active">Active</option>
                       <option value="pending">Pending</option>

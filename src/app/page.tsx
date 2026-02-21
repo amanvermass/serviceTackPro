@@ -50,10 +50,30 @@ export default function Login() {
         console.log('Login successful:', data);
         
         // Save auth data to localStorage
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        
-        router.push('/dashboard');
+        if (data && typeof data === 'object') {
+          if (data.token) {
+            localStorage.setItem('token', data.token);
+          }
+          if (data.user) {
+            localStorage.setItem('user', JSON.stringify(data.user));
+          }
+          localStorage.setItem('auth', JSON.stringify(data));
+
+          const permissions = (data.user && data.user.permissions) || {};
+
+          const defaultRoute =
+            permissions.clients ? '/client-management' :
+            permissions.domains ? '/domain-management' :
+            permissions.hosting ? '/hosting-management' :
+            permissions.maintenance ? '/maintenance-module' :
+            permissions.team ? '/team-management' :
+            permissions.settings ? '/settings' :
+            '/dashboard';
+
+          router.push(defaultRoute);
+        } else {
+          router.push('/dashboard');
+        }
       } else {
         const errorMessage = data.message || 'Login failed';
         setError(errorMessage);

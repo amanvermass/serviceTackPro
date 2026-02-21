@@ -986,7 +986,7 @@ export default function HostingManagement() {
                   </th>
                   <th>Purchase By</th>
                   <th>Status</th>
-                  <th>Actions</th>
+                  <th className="flex items-center justify-end">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -994,7 +994,7 @@ export default function HostingManagement() {
                   <TableShimmer columns={9} rows={10} />
                 ) : (
                   filteredAccounts.map(account => (
-                    <tr key={account.id} className="hover:bg-secondary-50 transition-smooth cursor-pointer" onClick={() => handleRowClick(account)}>
+                    <tr key={account.id} className="hover:bg-secondary-50 transition-smooth">
                       <td>
                         <input type="checkbox" className="w-4 h-4 rounded border-border text-primary focus:ring-primary" onClick={(e) => e.stopPropagation()} />
                       </td>
@@ -1044,8 +1044,33 @@ export default function HostingManagement() {
                       </td>
                       <td>
                         <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                          <button
+                          {/* <button
                             className="p-2 rounded-lg hover:bg-surface-hover transition-smooth"
+                            aria-label="View hosting details"
+                            onClick={() => handleRowClick(account)}
+                          >
+                            <svg
+                              className="w-5 h-5 text-text-secondary"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                              />
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                              />
+                            </svg>
+                          </button> */}
+                          <button
+                            className="p-2 cursor-pointer rounded-lg hover:bg-surface-hover transition-smooth"
                             aria-label="Renew hosting"
                             onClick={(e) => handleOpenRenewModal(account, e)}
                           >
@@ -1054,7 +1079,7 @@ export default function HostingManagement() {
                             </svg>
                           </button>
                           <button 
-                            className="p-2 rounded-lg hover:bg-surface-hover transition-smooth" 
+                            className="p-2 cursor-pointer rounded-lg hover:bg-surface-hover transition-smooth" 
                             aria-label="Edit hosting"
                             onClick={() => handleEditClick(account)}
                           >
@@ -1063,7 +1088,7 @@ export default function HostingManagement() {
                             </svg>
                           </button>
                           <button 
-                            className="p-2 rounded-lg hover:bg-error-50 transition-smooth" 
+                            className="p-2 cursor-pointer rounded-lg hover:bg-error-50 transition-smooth" 
                             aria-label="Delete hosting"
                             onClick={(e) => handleDeleteClick(account.id, e)}
                           >
@@ -1399,7 +1424,9 @@ export default function HostingManagement() {
               <form className="p-6 space-y-6" onSubmit={handleSaveHosting}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="clientName" className="input-label">Client Name</label>
+                    <label htmlFor="clientName" className="input-label">
+                      Client Name <span className="text-error">*</span>
+                    </label>
                     <select 
                       id="clientName" 
                       name="clientName" 
@@ -1423,7 +1450,9 @@ export default function HostingManagement() {
                     </select>
                   </div>
                   <div>
-                    <label htmlFor="domain" className="input-label">Domain</label>
+                    <label htmlFor="domain" className="input-label">
+                      Domain <span className="text-error">*</span>
+                    </label>
                     <input 
                       type="text" 
                       id="domain" 
@@ -1438,7 +1467,9 @@ export default function HostingManagement() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="provider" className="input-label">Provider</label>
+                    <label htmlFor="provider" className="input-label">
+                      Provider <span className="text-error">*</span>
+                    </label>
                     <select 
                       id="provider" 
                       name="provider" 
@@ -1455,7 +1486,9 @@ export default function HostingManagement() {
                     </select>
                   </div>
                   <div>
-                    <label htmlFor="serviceType" className="input-label">Service Type</label>
+                    <label htmlFor="serviceType" className="input-label">
+                      Service Type <span className="text-error">*</span>
+                    </label>
                     <select 
                       id="serviceType" 
                       name="serviceType" 
@@ -1475,7 +1508,9 @@ export default function HostingManagement() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="renewalDate" className="input-label">Renewal Date</label>
+                    <label htmlFor="renewalDate" className="input-label">
+                      Renewal Date <span className="text-error">*</span>
+                    </label>
                     <input 
                       type="date" 
                       id="renewalDate" 
@@ -1486,7 +1521,9 @@ export default function HostingManagement() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="monthlyCost" className="input-label">Monthly Cost ($)</label>
+                    <label htmlFor="monthlyCost" className="input-label">
+                      Monthly Cost ($) <span className="text-error">*</span>
+                    </label>
                     <input 
                       type="number" 
                       id="monthlyCost" 
@@ -1500,9 +1537,11 @@ export default function HostingManagement() {
                     />
                   </div>
                 </div>
-
+                
                 <div>
-                  <label htmlFor="purchasedBy" className="input-label">Purchased By</label>
+                  <label htmlFor="purchasedBy" className="input-label">
+                    Purchased By <span className="text-error">*</span>
+                  </label>
                   <select
                     id="purchasedBy"
                     name="purchasedBy"
@@ -1517,10 +1556,12 @@ export default function HostingManagement() {
                     <option value="client">Client</option>
                   </select>
                 </div>
-
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="loginUrl" className="input-label">Login URL</label>
+                    <label htmlFor="loginUrl" className="input-label">
+                      Login URL <span className="text-error">*</span>
+                    </label>
                     <input
                       type="url"
                       id="loginUrl"
@@ -1531,7 +1572,9 @@ export default function HostingManagement() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="password" className="input-label">Password</label>
+                    <label htmlFor="password" className="input-label">
+                      Password <span className="text-error">*</span>
+                    </label>
                     <div className="relative">
                       <input
                         type={showPassword ? 'text' : 'password'}
