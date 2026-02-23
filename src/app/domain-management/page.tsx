@@ -34,6 +34,8 @@ export default function DomainManagement() {
   const [clientFilter, setClientFilter] = useState('all');
   const [vendorFilter, setVendorFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [purchasedByFilter, setPurchasedByFilter] = useState<string[]>([]);
+  const [isPurchasedByDropdownOpen, setIsPurchasedByDropdownOpen] = useState(false);
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -278,21 +280,24 @@ export default function DomainManagement() {
   const filteredDomains = useMemo(() => {
     let result = [...domains];
 
-    // Client filter is NOT supported by backend yet, so filter here
     if (clientFilter !== 'all') {
       const clientMap: Record<string, string> = {
-        'techcorp': 'TechCorp Solutions',
-        'digital': 'Digital Innovations Inc',
-        'greenstart': 'GreenStart Ventures',
-        'bluesky': 'BlueSky Consulting'
+        techcorp: 'TechCorp Solutions',
+        digital: 'Digital Innovations Inc',
+        greenstart: 'GreenStart Ventures',
+        bluesky: 'BlueSky Consulting',
       };
       if (clientMap[clientFilter]) {
         result = result.filter(d => d.client === clientMap[clientFilter]);
       }
     }
-    
+
+    if (purchasedByFilter.length > 0) {
+      result = result.filter(d => d.purchasedBy && purchasedByFilter.includes(d.purchasedBy));
+    }
+
     return result;
-  }, [domains, clientFilter]);
+  }, [domains, clientFilter, purchasedByFilter]);
 
   // Handlers
   const handleSort = (key: keyof Domain) => {
@@ -940,7 +945,75 @@ export default function DomainManagement() {
                       </svg>
                     </div>
                   </th>
-                  <th>Purchased By</th>
+                  <th className="relative">
+                    <div className="flex items-center gap-1">
+                      <span>Purchased By</span>
+                      <button
+                        type="button"
+                        className={`p-1 rounded hover:bg-secondary-100 transition-smooth ${
+                          purchasedByFilter.length > 0 ? 'text-primary' : 'text-text-tertiary'
+                        }`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsPurchasedByDropdownOpen(prev => !prev);
+                        }}
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M3 4a1 1 0 011-1h16a1 1 0 01.8 1.6L15 13v4a1 1 0 01-.553.894l-4 2A1 1 0 019 19v-6L3.2 4.6A1 1 0 013 4z"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                    {isPurchasedByDropdownOpen && (
+                      <div className="absolute right-0 mt-2 z-30 w-44 bg-surface border border-border rounded-lg shadow-lg p-2">
+                        {[
+                          { value: 'kvtmedia', label: 'KVT Media' },
+                          { value: 'client', label: 'Client' },
+                        ].map(option => (
+                          <label
+                            key={option.value}
+                            className="flex items-center gap-2 py-1 text-sm text-text-secondary cursor-pointer"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                              checked={purchasedByFilter.includes(option.value)}
+                              onChange={() => {
+                                setPurchasedByFilter(prev =>
+                                  prev.includes(option.value)
+                                    ? prev.filter(v => v !== option.value)
+                                    : [...prev, option.value]
+                                );
+                              }}
+                            />
+                            <span>{option.label}</span>
+                          </label>
+                        ))}
+                        {purchasedByFilter.length > 0 && (
+                          <button
+                            type="button"
+                            className="mt-2 text-xs text-primary hover:underline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPurchasedByFilter([]);
+                            }}
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </th>
                   <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" onClick={() => handleSort('cost')}>
                     <div className="flex items-center gap-2">
                       Cost
