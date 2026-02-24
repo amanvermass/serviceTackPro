@@ -82,6 +82,8 @@ export default function HostingManagement() {
   const [providerFilter, setProviderFilter] = useState('all');
   const [serviceTypeFilter, setServiceTypeFilter] = useState('all');
   const [renewalFilter, setRenewalFilter] = useState('all');
+  const [purchasedByFilter, setPurchasedByFilter] = useState<string[]>([]);
+  const [isPurchasedByDropdownOpen, setIsPurchasedByDropdownOpen] = useState(false);
 
 
   // Fetch providers and service types on mount
@@ -311,8 +313,18 @@ export default function HostingManagement() {
   const getProviderName = (provider: any) => typeof provider === 'object' && provider !== null ? provider.name : provider;
   const getServiceTypeName = (type: any) => typeof type === 'object' && type !== null ? type.name : type;
 
-  // Filtered Data - Data is now filtered on server side
-  const filteredAccounts = hostingAccounts;
+  // Filtered Data - server handles most filters, apply client-only filters here
+  const filteredAccounts = useMemo(() => {
+    let result = [...hostingAccounts];
+
+    if (purchasedByFilter.length > 0) {
+      result = result.filter(
+        account => account.purchasedBy && purchasedByFilter.includes(account.purchasedBy)
+      );
+    }
+
+    return result;
+  }, [hostingAccounts, purchasedByFilter]);
 
   const handleRowClick = (account: HostingAccount) => {
     router.push(`/hosting-management/${account.id}`);
@@ -986,7 +998,75 @@ export default function HostingManagement() {
                       </svg>
                     </div>
                   </th>
-                  <th>Purchase By</th>
+                  <th className="relative">
+                    <div className="flex items-center gap-1">
+                      <span>Purchase By</span>
+                      <button
+                        type="button"
+                        className={`p-1 rounded hover:bg-secondary-100 transition-smooth ${
+                          purchasedByFilter.length > 0 ? 'text-primary' : 'text-text-tertiary'
+                        }`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsPurchasedByDropdownOpen(prev => !prev);
+                        }}
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M3 4a1 1 0 011-1h16a1 1 0 01.8 1.6L15 13v4a1 1 0 01-.553.894l-4 2A1 1 0 019 19v-6L3.2 4.6A1 1 0 013 4z"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                    {isPurchasedByDropdownOpen && (
+                      <div className="absolute right-0 mt-2 z-30 w-44 bg-surface border border-border rounded-lg shadow-lg p-2">
+                        {[
+                          { value: 'kvtmedia', label: 'KVT Media' },
+                          { value: 'client', label: 'Client' },
+                        ].map(option => (
+                          <label
+                            key={option.value}
+                            className="flex items-center gap-2 py-1 text-sm text-text-secondary cursor-pointer"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                              checked={purchasedByFilter.includes(option.value)}
+                              onChange={() => {
+                                setPurchasedByFilter(prev =>
+                                  prev.includes(option.value)
+                                    ? prev.filter(v => v !== option.value)
+                                    : [...prev, option.value]
+                                );
+                              }}
+                            />
+                            <span>{option.label}</span>
+                          </label>
+                        ))}
+                        {purchasedByFilter.length > 0 && (
+                          <button
+                            type="button"
+                            className="mt-2 text-xs text-primary hover:underline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPurchasedByFilter([]);
+                            }}
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </th>
                   <th>Status</th>
                   <th className="flex items-center justify-end">Actions</th>
                 </tr>

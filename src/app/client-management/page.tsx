@@ -21,6 +21,7 @@ export default function ClientManagement() {
   const itemsPerPage = 10;
   const [hoveredServices, setHoveredServices] = useState<Client['activeServicesList'] | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const fetchClients = async (search = '', page = 1) => {
     setLoading(true);
@@ -187,6 +188,56 @@ export default function ClientManagement() {
     });
   }, [clients, serviceFilter, statusFilter]);
 
+  const handleExport = async () => {
+    if (isExporting) return;
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL as string;
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        toastConfig.error('You must be logged in to export clients');
+        return;
+      }
+
+      setIsExporting(true);
+
+      const params = new URLSearchParams();
+      if (searchTerm) params.append('search', searchTerm);
+      if (statusFilter && statusFilter !== 'all') params.append('status', statusFilter);
+
+      const url = `${apiUrl}/api/clients/export${params.toString() ? `?${params.toString()}` : ''}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'x-auth-token': token
+        }
+      });
+
+      if (!response.ok) {
+        toastConfig.error('Failed to export clients');
+        return;
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = 'clients.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+
+      toastConfig.success('Clients exported successfully');
+    } catch (error) {
+      console.error('Error exporting clients:', error);
+      toastConfig.error('An error occurred while exporting clients');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case 'active': return 'badge-success';
@@ -281,11 +332,26 @@ export default function ClientManagement() {
             <p className="text-sm text-text-secondary">
               Showing <span id="resultCount" className="font-semibold text-text-primary">{filteredClients.length}</span> clients
             </p>
-            <button id="exportBtn" className="btn btn-outline text-sm h-9 px-4 flex items-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            <button 
+              id="exportBtn" 
+              className="btn cursor-pointer btn-outline text-sm h-9 px-4 flex items-center gap-2 disabled:opacity-60"
+              onClick={handleExport}
+              disabled={isExporting}
+            >
+              <svg
+                className={`w-4 h-4 ${isExporting ? 'animate-spin' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
               </svg>
-              Export
+              {isExporting ? 'Exporting...' : 'Export'}
             </button>
           </div>
         </div>
