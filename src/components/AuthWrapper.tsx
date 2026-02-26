@@ -16,8 +16,13 @@ export default function AuthWrapper({
 
   useEffect(() => {
     // List of public paths that don't require authentication
-    const publicPaths = ["/", "/forgot-password"];
-    
+    const publicPaths = [
+      "/",
+      "/forgot-password",
+      "/verify-otp",
+      "/reset-password",
+    ];
+
     // Check if the current path is public
     const isPublicPath = publicPaths.includes(pathname);
 
@@ -28,30 +33,35 @@ export default function AuthWrapper({
       if (token) {
         try {
           // Decode JWT payload to check expiration
-          const base64Url = token.split('.')[1];
-          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-          const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-          }).join(''));
+          const base64Url = token.split(".")[1];
+          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split("")
+              .map(function (c) {
+                return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+              })
+              .join(""),
+          );
           const payload = JSON.parse(jsonPayload);
-          
+
           if (payload.exp && payload.exp * 1000 < Date.now()) {
-             // Token expired
-             localStorage.removeItem("token");
-             localStorage.removeItem("user");
-             if (!isPublicPath) {
-               toastConfig.error("Session expired. Please login again.");
-             }
+            // Token expired
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+            if (!isPublicPath) {
+              toastConfig.error("Session expired. Please login again.");
+            }
           } else {
-             isTokenValid = true;
+            isTokenValid = true;
           }
         } catch (e) {
-           // Invalid token format
-           localStorage.removeItem("token");
-           localStorage.removeItem("user");
+          // Invalid token format
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
         }
       }
-      
+
       if (!isTokenValid && !isPublicPath) {
         // If no valid token and trying to access private route
         setIsAuthenticated(false);
@@ -59,7 +69,7 @@ export default function AuthWrapper({
       } else if (isTokenValid && pathname === "/") {
         // If authenticated and trying to access login page, redirect to dashboard
         setIsAuthenticated(true);
-        router.push("/dashboard"); 
+        router.push("/dashboard");
       } else {
         setIsAuthenticated(true);
         setLoading(false);
@@ -72,7 +82,7 @@ export default function AuthWrapper({
   // Show nothing while checking auth to prevent flash of protected content
   // Unless it's a public path, then we can show it immediately (though checking is fast)
   if (loading) {
-    return null; 
+    return null;
     // Or return a loading spinner:
     // return <div className="flex h-screen w-screen items-center justify-center">Loading...</div>;
   }
