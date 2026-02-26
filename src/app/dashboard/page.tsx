@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import toastConfig from '@/components/CustomToast';
+import TableShimmer from '@/components/TableShimmer';
 
 type DashboardCounts = {
   upcomingDomains: number;
@@ -27,14 +28,17 @@ type UpcomingRenewal = {
 export default function Dashboard() {
   const [counts, setCounts] = useState<DashboardCounts | null>(null);
   const [upcomingRenewals, setUpcomingRenewals] = useState<UpcomingRenewal[]>([]);
-  const [isRenewalsLoading, setIsRenewalsLoading] = useState(false);
+  const [isCountsLoading, setIsCountsLoading] = useState(true);
+  const [isRenewalsLoading, setIsRenewalsLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setIsCountsLoading(true);
         setIsRenewalsLoading(true);
         const token = localStorage.getItem('token');
         if (!token) {
+          setIsCountsLoading(false);
           setIsRenewalsLoading(false);
           return;
         }
@@ -76,6 +80,7 @@ export default function Dashboard() {
         console.error('Error fetching dashboard counts:', error);
         toastConfig.error('Failed to load dashboard data');
       } finally {
+        setIsCountsLoading(false);
         setIsRenewalsLoading(false);
       }
     };
@@ -102,25 +107,35 @@ export default function Dashboard() {
         </div>
 
         {/* KPI CARDS */}
-        <div className="grid grid-cols-3 sm:grid-cols-3 xl:grid-cols-3 gap-5 mb-10">
-          {[
-            { label: 'Upcoming Domain Renewals', value: counts?.upcomingDomains ?? 0 },
-            { label: 'Upcoming Hosting Renewals', value: counts?.upcomingHosting ?? 0 },
-            { label: 'Upcoming Maintenance Renewals', value: counts?.upcomingMaintenance ?? 0 },
-            { label: 'Active Clients', value: counts?.activeClients ?? 0 },
-            { label: 'Active Domains', value: counts?.activeDomains ?? 0 },
-            { label: 'Active Hosting', value: counts?.activeHosting ?? 0 },
-          ].map((item) => (
-            <div
-              key={item.label}
-              className="card p-5 rounded-xl bg-card shadow-sm hover:shadow-md transition-shadow"
-            >
-              <p className="text-text-secondary text-sm">{item.label}</p>
-              <p className="mt-2 font-bold text-2xl text-text-primary">
-                {item.value}
-              </p>
-            </div>
-          ))}
+        <div className="grid grid-cols-6 sm:grid-cols-6 md:grid-cols-6 xl:grid-cols-6 gap-5 mb-10">
+          {isCountsLoading
+            ? Array.from({ length: 6 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="card p-5 rounded-xl bg-card shadow-sm animate-pulse"
+                >
+                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-3" />
+                  <div className="h-7 bg-gray-200 rounded w-1/2" />
+                </div>
+              ))
+            : [
+                { label: 'Upcoming Domain Renewals', value: counts?.upcomingDomains ?? 0 },
+                { label: 'Upcoming Hosting Renewals', value: counts?.upcomingHosting ?? 0 },
+                { label: 'Upcoming Maintenance Renewals', value: counts?.upcomingMaintenance ?? 0 },
+                { label: 'Active Clients', value: counts?.activeClients ?? 0 },
+                { label: 'Active Domains', value: counts?.activeDomains ?? 0 },
+                { label: 'Active Hosting', value: counts?.activeHosting ?? 0 },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className="card p-5 rounded-xl bg-card shadow-sm hover:shadow-md transition-shadow"
+                >
+                  <p className="text-text-secondary text-sm">{item.label}</p>
+                  <p className="mt-2 font-bold text-2xl text-text-primary">
+                    {item.value}
+                  </p>
+                </div>
+              ))}
         </div>
 
         {/* MAIN GRID */}
@@ -135,6 +150,7 @@ export default function Dashboard() {
                 <thead>
                   <tr>
                     <th>Client</th>
+                    <th>Email</th>
                     <th>Service</th>
                     <th>Renewal Date</th>
                     <th className="flex items-center justify-end">Actions</th>
@@ -143,14 +159,10 @@ export default function Dashboard() {
 
                 <tbody>
                   {isRenewalsLoading ? (
-                    <tr>
-                      <td colSpan={4} className="py-6 text-center text-sm text-text-secondary">
-                        Loading upcoming renewals...
-                      </td>
-                    </tr>
+                    <TableShimmer columns={5} rows={6} />
                   ) : upcomingRenewals.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="py-6 text-center text-sm text-text-secondary">
+                      <td colSpan={5} className="py-6 text-center text-sm text-text-secondary">
                         No upcoming renewals found
                       </td>
                     </tr>
@@ -161,10 +173,10 @@ export default function Dashboard() {
                         className="hover:bg-surface-hover transition-smooth cursor-pointer"
                       >
                         <td>
-                          <div>
-                            <p className="font-medium text-text-primary">{item.clientName}</p>
-                            <p className="text-xs text-text-secondary">{item.clientEmail}</p>
-                          </div>
+                          <p className="font-medium text-text-primary">{item.clientName}</p>
+                        </td>
+                        <td>
+                          <p className="text-xs text-text-secondary">{item.clientEmail}</p>
                         </td>
                         <td>
                           <span

@@ -18,6 +18,10 @@ export default function ClientManagement() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [sortConfig, setSortConfig] = useState<{ sortBy: string; order: 'asc' | 'desc' }>({
+    sortBy: 'createdAt',
+    order: 'desc'
+  });
   const itemsPerPage = 10;
   const [hoveredServices, setHoveredServices] = useState<Client['activeServicesList'] | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
@@ -43,8 +47,8 @@ export default function ClientManagement() {
       const queryParams = new URLSearchParams({
         page: page.toString(),
         limit: itemsPerPage.toString(),
-        sortBy: 'createdAt',
-        order: 'desc'
+        sortBy: sortConfig.sortBy,
+        order: sortConfig.order
       });
       if (search) queryParams.append('search', search);
       if (statusFilter !== 'all') queryParams.append('status', statusFilter);
@@ -152,7 +156,7 @@ export default function ClientManagement() {
       fetchClients(searchTerm, currentPage);
     }, 500);
     return () => clearTimeout(timer);
-  }, [searchTerm, statusFilter, currentPage]);
+  }, [searchTerm, statusFilter, currentPage, sortConfig]);
 
   const handleRowClick = (id: string) => {
     router.push(`/client-management/${id}`);
@@ -167,6 +171,14 @@ export default function ClientManagement() {
   const handleAddClick = () => {
     setEditingClient(null);
     setIsAddClientModalOpen(true);
+  };
+
+  const handleSort = (sortBy: 'company' | 'contact' | 'services' | 'totalSpent') => {
+    setSortConfig(current => ({
+      sortBy,
+      order: current.sortBy === sortBy && current.order === 'asc' ? 'desc' : 'asc'
+    }));
+    setCurrentPage(1);
   };
 
   const filteredClients = useMemo(() => {
@@ -362,34 +374,78 @@ export default function ClientManagement() {
             <table className="table">
               <thead>
                 <tr>
-                  <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" data-sort="company">
+                  <th
+                    className="cursor-pointer hover:bg-secondary-100 transition-smooth"
+                    data-sort="company"
+                    onClick={() => handleSort('company')}
+                  >
                     <div className="flex items-center gap-2">
                       Company Name
-                      <svg className="w-4 h-4 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg
+                        className={`w-4 h-4 text-text-tertiary transition-transform ${
+                          sortConfig.sortBy === 'company' && sortConfig.order === 'desc' ? 'rotate-180' : ''
+                        }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                       </svg>
                     </div>
                   </th>
-                  <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" data-sort="contact">
+                  <th
+                    className="cursor-pointer hover:bg-secondary-100 transition-smooth"
+                    data-sort="contact"
+                    onClick={() => handleSort('contact')}
+                  >
                     <div className="flex items-center gap-2">
                       Primary Contact
-                      <svg className="w-4 h-4 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg
+                        className={`w-4 h-4 text-text-tertiary transition-transform ${
+                          sortConfig.sortBy === 'contact' && sortConfig.order === 'desc' ? 'rotate-180' : ''
+                        }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                       </svg>
                     </div>
                   </th>
-                  <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" data-sort="services">
+                  <th
+                    className="cursor-pointer hover:bg-secondary-100 transition-smooth"
+                    data-sort="services"
+                    onClick={() => handleSort('services')}
+                  >
                     <div className="flex items-center gap-2">
                       Active Services
-                      <svg className="w-4 h-4 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg
+                        className={`w-4 h-4 text-text-tertiary transition-transform ${
+                          sortConfig.sortBy === 'services' && sortConfig.order === 'desc' ? 'rotate-180' : ''
+                        }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                       </svg>
                     </div>
                   </th>
-                  <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" data-sort="interaction">
+                  <th
+                    className="cursor-pointer hover:bg-secondary-100 transition-smooth"
+                    data-sort="interaction"
+                    onClick={() => handleSort('totalSpent')}
+                  >
                     <div className="flex items-center gap-2">
                       Total Spent
-                      <svg className="w-4 h-4 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg
+                        className={`w-4 h-4 text-text-tertiary transition-transform ${
+                          sortConfig.sortBy === 'totalSpent' && sortConfig.order === 'desc' ? 'rotate-180' : ''
+                        }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                       </svg>
                     </div>

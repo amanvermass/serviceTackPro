@@ -27,6 +27,7 @@ export default function TeamManagement() {
   }
 
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
@@ -49,6 +50,7 @@ export default function TeamManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [isExporting, setIsExporting] = useState(false);
+  const itemsPerPage = 10;
 
   const fetchTeam = useCallback(async () => {
     setIsLoading(true);
@@ -61,7 +63,16 @@ export default function TeamManagement() {
         return;
       }
 
-      const response = await fetch(`${baseUrl}/api/teams`, {
+      const params = new URLSearchParams();
+      params.append('page', currentPage.toString());
+      params.append('limit', itemsPerPage.toString());
+      if (searchTerm) params.append('search', searchTerm);
+      if (roleFilter !== 'all') params.append('role', roleFilter);
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+      params.append('sortBy', sortKey);
+      params.append('order', sortDir);
+
+      const response = await fetch(`${baseUrl}/api/teams?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -70,6 +81,12 @@ export default function TeamManagement() {
       if (response.ok) {
         const data = await response.json();
         const items = Array.isArray(data) ? data : (data.data || []);
+        
+        if (!Array.isArray(data) && data.count !== undefined) {
+          setTotalCount(data.count);
+        } else {
+          setTotalCount(items.length);
+        }
 
         const apiMembers: TeamMember[] = items.map((item: any) => {
           const notifications: string[] = [];
@@ -121,14 +138,16 @@ export default function TeamManagement() {
         setMembers(apiMembers);
       } else {
         setMembers([]);
+        setTotalCount(0);
       }
     } catch (error) {
       console.error('Error fetching team members:', error);
       setMembers([]);
+      setTotalCount(0);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [currentPage, itemsPerPage, searchTerm, roleFilter, statusFilter, sortKey, sortDir]);
 
   const fetchTeamStats = useCallback(async () => {
     try {
@@ -283,7 +302,6 @@ export default function TeamManagement() {
     return arr;
   }, [filtered, sortKey, sortDir]);
 
-  const itemsPerPage = 10;
   const totalPages = Math.max(1, Math.ceil(sorted.length / itemsPerPage) || 1);
   const safePage = Math.min(currentPage, totalPages);
   const startIndex = (safePage - 1) * itemsPerPage;

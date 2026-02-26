@@ -85,6 +85,12 @@ export default function HostingManagement() {
   const [purchasedByFilter, setPurchasedByFilter] = useState<string[]>([]);
   const [isPurchasedByDropdownOpen, setIsPurchasedByDropdownOpen] = useState(false);
 
+  // Sorting State
+  const [sortConfig, setSortConfig] = useState<{ sortBy: string; order: 'asc' | 'desc' }>({
+    sortBy: 'renewalDate',
+    order: 'asc'
+  });
+
 
   // Fetch providers and service types on mount
   useEffect(() => {
@@ -221,6 +227,9 @@ export default function HostingManagement() {
         const params = new URLSearchParams();
         params.append('page', page.toString());
         params.append('limit', itemsPerPage.toString());
+        params.append('sortBy', sortConfig.sortBy);
+        params.append('order', sortConfig.order);
+
         if (searchTerm) params.append('search', searchTerm);
         if (providerFilter && providerFilter !== 'all') params.append('provider', providerFilter);
         if (serviceTypeFilter && serviceTypeFilter !== 'all') params.append('serviceType', serviceTypeFilter);
@@ -306,7 +315,15 @@ export default function HostingManagement() {
       fetchHostingAccounts(currentPage);
     }, 500);
     return () => clearTimeout(timeoutId);
-  }, [searchTerm, providerFilter, serviceTypeFilter, renewalFilter, currentPage]);
+  }, [searchTerm, providerFilter, serviceTypeFilter, renewalFilter, currentPage, sortConfig]);
+
+  const handleSort = (key: string) => {
+    setSortConfig(current => ({
+      sortBy: key,
+      order: current.sortBy === key && current.order === 'asc' ? 'desc' : 'asc'
+    }));
+    setCurrentPage(1);
+  };
 
 
   // Helper to safely get string value from potentially object fields
@@ -958,52 +975,52 @@ export default function HostingManagement() {
                   <th>
                     <input type="checkbox" id="selectAll" className="w-4 h-4 rounded border-border text-primary focus:ring-primary" aria-label="Select all hosting accounts" />
                   </th>
-                  <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" data-sort="client">
+                  <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" onClick={() => handleSort('client')}>
                     <div className="flex items-center gap-2">
                       Client Name
-                      <svg className="w-4 h-4 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.sortBy === 'client' && sortConfig.order === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                       </svg>
                     </div>
                   </th>
-                  <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" data-sort="provider">
+                  <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" onClick={() => handleSort('provider')}>
                     <div className="flex items-center gap-2">
                       Provider
-                      <svg className="w-4 h-4 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.sortBy === 'provider' && sortConfig.order === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                       </svg>
                     </div>
                   </th>
-                  <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" data-sort="type">
+                  <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" onClick={() => handleSort('serviceType')}>
                     <div className="flex items-center gap-2">
                       Service Type
-                      <svg className="w-4 h-4 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.sortBy === 'serviceType' && sortConfig.order === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                       </svg>
                     </div>
                   </th>
-                  <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" data-sort="renewal">
+                  <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" onClick={() => handleSort('renewalDate')}>
                     <div className="flex items-center gap-2">
                       Renewal Date
-                      <svg className="w-4 h-4 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.sortBy === 'renewalDate' && sortConfig.order === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                       </svg>
                     </div>
                   </th>
-                  <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" data-sort="cost">
+                  <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" onClick={() => handleSort('monthlyCost')}>
                     <div className="flex items-center gap-2">
                       Monthly Cost
-                      <svg className="w-4 h-4 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.sortBy === 'monthlyCost' && sortConfig.order === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                       </svg>
                     </div>
                   </th>
-                  <th className="relative">
+                  <th className="relative cursor-pointer hover:bg-secondary-100 transition-smooth" onClick={() => handleSort('purchasedBy')}>
                     <div className="flex items-center gap-1">
                       <span>Purchase By</span>
                       <button
                         type="button"
-                        className={`p-1 rounded hover:bg-secondary-100 transition-smooth ${
+                        className={`p-1 rounded hover:bg-secondary-100 transition-smooth ml-1 ${
                           purchasedByFilter.length > 0 ? 'text-primary' : 'text-text-tertiary'
                         }`}
                         onClick={(e) => {
@@ -1027,7 +1044,7 @@ export default function HostingManagement() {
                       </button>
                     </div>
                     {isPurchasedByDropdownOpen && (
-                      <div className="absolute right-0 mt-2 z-30 w-44 bg-surface border border-border rounded-lg shadow-lg p-2">
+                      <div className="absolute right-0 mt-2 z-30 w-44 bg-surface border border-border rounded-lg shadow-lg p-2" onClick={(e) => e.stopPropagation()}>
                         {[
                           { value: 'kvtmedia', label: 'KVT Media' },
                           { value: 'client', label: 'Client' },
@@ -1035,7 +1052,6 @@ export default function HostingManagement() {
                           <label
                             key={option.value}
                             className="flex items-center gap-2 py-1 text-sm text-text-secondary cursor-pointer"
-                            onClick={(e) => e.stopPropagation()}
                           >
                             <input
                               type="checkbox"
@@ -1061,13 +1077,20 @@ export default function HostingManagement() {
                               setPurchasedByFilter([]);
                             }}
                           >
-                            Clear
+                            Clear Filter
                           </button>
                         )}
                       </div>
                     )}
                   </th>
-                  <th>Status</th>
+                  <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" onClick={() => handleSort('status')}>
+                    <div className="flex items-center gap-2">
+                      Status
+                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.sortBy === 'status' && sortConfig.order === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                      </svg>
+                    </div>
+                  </th>
                   <th className="flex items-center justify-end">Actions</th>
                 </tr>
               </thead>

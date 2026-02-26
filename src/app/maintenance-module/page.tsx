@@ -131,12 +131,13 @@ export default function MaintenanceModule() {
     status: [] as string[]
   });
 
-  const [sortConfig, setSortConfig] = useState<{ key: keyof Project | 'amc' | 'changes'; direction: 'asc' | 'desc' }>({
-    key: 'client',
-    direction: 'asc'
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({
+    key: 'createdAt',
+    direction: 'desc'
   });
 
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const itemsPerPage = 10;
 
   const calculateMonthlyValue = (amcValue: number, frequency: string) => {
@@ -183,6 +184,11 @@ export default function MaintenanceModule() {
       const token = localStorage.getItem('token');
 
       const params = new URLSearchParams();
+      params.append('page', currentPage.toString());
+      params.append('limit', itemsPerPage.toString());
+      params.append('sortBy', sortConfig.key);
+      params.append('order', sortConfig.direction);
+
       if (filters.search.trim()) {
         params.append('search', filters.search.trim());
       }
@@ -200,6 +206,13 @@ export default function MaintenanceModule() {
       if (response.ok) {
         const data = await response.json();
         const items = Array.isArray(data) ? data : (data.data || []);
+        
+        if (!Array.isArray(data) && data.count !== undefined) {
+           setTotalCount(data.count);
+        } else {
+           // Fallback if API doesn't return count (e.g. old API)
+           setTotalCount(items.length); 
+        }
 
         const mappedData: Project[] = items.map((item: any) => ({
           id: item._id,
@@ -310,7 +323,7 @@ export default function MaintenanceModule() {
 
   useEffect(() => {
     fetchProjects();
-  }, [filters.search, filters.status]);
+  }, [filters, sortConfig, currentPage]);
 
   useEffect(() => {
     fetchStats();
@@ -369,13 +382,18 @@ export default function MaintenanceModule() {
   }, [filteredProjects, sortConfig]);
 
   const paginatedProjects = useMemo(() => {
+    // If API handles pagination, projects is already the current page
+    if (projects.length <= itemsPerPage && totalCount > itemsPerPage) {
+        return sortedProjects;
+    }
+    // Fallback for client-side pagination if API returns all items
     const startIndex = (currentPage - 1) * itemsPerPage;
     return sortedProjects.slice(startIndex, startIndex + itemsPerPage);
-  }, [sortedProjects, currentPage]);
+  }, [sortedProjects, currentPage, itemsPerPage, projects.length, totalCount]);
 
   const totalPages = useMemo(
-    () => Math.max(1, Math.ceil(sortedProjects.length / itemsPerPage)),
-    [sortedProjects, itemsPerPage]
+    () => Math.max(1, Math.ceil(totalCount / itemsPerPage)),
+    [totalCount, itemsPerPage]
   );
 
   const stats = useMemo(() => {

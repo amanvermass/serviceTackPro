@@ -47,7 +47,10 @@ export default function DomainManagement() {
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
 
   // Sorting State
-  const [sortConfig, setSortConfig] = useState<{ key: keyof Domain; direction: 'asc' | 'desc' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ sortBy: string; order: 'asc' | 'desc' }>({
+    sortBy: 'expiryDate',
+    order: 'asc'
+  });
 
   const fetchDomains = useCallback(async () => {
     setLoading(true);
@@ -61,23 +64,16 @@ export default function DomainManagement() {
       const queryParams = new URLSearchParams({
         page: currentPage.toString(),
         limit: itemsPerPage.toString(),
+        sortBy: sortConfig.sortBy === 'name' ? 'domainName' : 
+                sortConfig.sortBy === 'vendor' ? 'registrar' : 
+                sortConfig.sortBy,
+        order: sortConfig.order
       });
 
       if (searchQuery) queryParams.append('search', searchQuery);
       if (statusFilter !== 'all') queryParams.append('status', statusFilter);
       if (vendorFilter !== 'all') queryParams.append('registrar', vendorFilter);
       
-      if (sortConfig) {
-        // Map frontend sort keys to backend keys if necessary
-        let sortBy = sortConfig.key;
-        if (sortBy === 'name') sortBy = 'domainName' as any;
-        if (sortBy === 'vendor') sortBy = 'registrar' as any;
-        // Backend expects specific fields, default to expiryDate if not supported
-        // But for now let's pass it and hope backend handles or ignores
-        queryParams.append('sortBy', sortBy as string);
-        queryParams.append('order', sortConfig.direction);
-      }
-
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/domains?${queryParams.toString()}`, {
         headers: {
           'x-auth-token': token,
@@ -300,13 +296,12 @@ export default function DomainManagement() {
   }, [domains, clientFilter, purchasedByFilter]);
 
   // Handlers
-  const handleSort = (key: keyof Domain) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
-    console.log('Sorting by:', key, direction);
+  const handleSort = (key: string) => {
+    setSortConfig(current => ({
+      sortBy: key,
+      order: current.sortBy === key && current.order === 'asc' ? 'desc' : 'asc'
+    }));
+    setCurrentPage(1);
   };
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -908,7 +903,7 @@ export default function DomainManagement() {
                   <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" onClick={() => handleSort('name')}>
                     <div className="flex items-center gap-2">
                       Domain Name
-                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig?.key === 'name' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.sortBy === 'name' && sortConfig.order === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                       </svg>
                     </div>
@@ -916,7 +911,7 @@ export default function DomainManagement() {
                   <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" onClick={() => handleSort('client')}>
                     <div className="flex items-center gap-2">
                       Client
-                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig?.key === 'client' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.sortBy === 'client' && sortConfig.order === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                       </svg>
                     </div>
@@ -924,7 +919,7 @@ export default function DomainManagement() {
                   <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" onClick={() => handleSort('expiryDate')}>
                     <div className="flex items-center gap-2">
                       Expiry Date
-                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig?.key === 'expiryDate' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.sortBy === 'expiryDate' && sortConfig.order === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                       </svg>
                     </div>
@@ -932,7 +927,7 @@ export default function DomainManagement() {
                   <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" onClick={() => handleSort('vendor')}>
                     <div className="flex items-center gap-2">
                       Vendor
-                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig?.key === 'vendor' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.sortBy === 'vendor' && sortConfig.order === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                       </svg>
                     </div>
@@ -940,7 +935,7 @@ export default function DomainManagement() {
                   <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" onClick={() => handleSort('status')}>
                     <div className="flex items-center gap-2">
                       Status
-                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig?.key === 'status' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.sortBy === 'status' && sortConfig.order === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                       </svg>
                     </div>
@@ -1017,7 +1012,7 @@ export default function DomainManagement() {
                   <th className="cursor-pointer hover:bg-secondary-100 transition-smooth" onClick={() => handleSort('cost')}>
                     <div className="flex items-center gap-2">
                       Cost
-                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig?.key === 'cost' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className={`w-4 h-4 text-text-tertiary transition-transform ${sortConfig.sortBy === 'cost' && sortConfig.order === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                       </svg>
                     </div>
