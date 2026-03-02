@@ -211,11 +211,12 @@ export default function ProfilePage() {
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handlePasswordChange = async (e) => {
+  const handlePasswordChange = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     const { oldPassword, newPassword, confirmPassword } = form;
@@ -263,11 +264,13 @@ export default function ProfilePage() {
       });
 
       setShowSecurity(false); // hide after success
-    } catch (err) {
-      const message =
-        err.response?.data?.message ||
-        err.response?.data?.error ||
-        "Failed to change password";
+    } catch (err: unknown) {
+      let message = "Failed to change password";
+
+      if (axios.isAxiosError(err)) {
+        message =
+          err.response?.data?.message || err.response?.data?.error || message;
+      }
 
       toast.error(message);
     } finally {
