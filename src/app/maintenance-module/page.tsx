@@ -140,7 +140,7 @@ export default function MaintenanceModule() {
   const [totalCount, setTotalCount] = useState(0);
   const itemsPerPage = 10;
 
-  const calculateMonthlyValue = (amcValue: number, frequency: string) => {
+  const calculateMonthlyValue = (amcValue: number, frequency: string) => { 
     if (!amcValue || amcValue <= 0) return 0;
     switch (frequency) {
       case 'daily':
