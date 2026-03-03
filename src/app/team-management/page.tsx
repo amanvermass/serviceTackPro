@@ -1797,7 +1797,7 @@ export default function TeamManagement() {
                   </div>
                 </div>
 
-                <div>
+                {/* <div>
                   <label className="input-label">Module Permissions</label>
                   <div className="grid grid-cols-2 gap-3 mt-2">
                     {[
@@ -1825,7 +1825,7 @@ export default function TeamManagement() {
                       </label>
                     ))}
                   </div>
-                </div>
+                </div> */}
 
                 <div>
                   <label className="input-label">

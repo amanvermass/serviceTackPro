@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -108,6 +107,9 @@ export default function ProfilePage() {
       setUser(updatedUser);
       setIsEditing(false);
       setPreview(null);
+
+      // Trigger Header refresh
+      window.dispatchEvent(new Event("profileUpdated"));
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Update failed");
     } finally {
@@ -161,7 +163,9 @@ export default function ProfilePage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.message || data.error || "Failed to change password");
+        throw new Error(
+          data.message || data.error || "Failed to change password",
+        );
       }
 
       toast.success(data.message || "Password updated successfully");
