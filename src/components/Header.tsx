@@ -4,7 +4,6 @@ import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import toastConfig from "@/components/CustomToast";
-import axios from "axios";
 
 type NotificationType = {
   id: string;
@@ -90,11 +89,16 @@ export default function Header() {
         const token = localStorage.getItem("token");
         if (!token) return;
 
-        const res = await axios.get(`${API_BASE}/api/users/me`, {
+        const res = await fetch(`${API_BASE}/api/users/me`, {
           headers: { "x-auth-token": token },
         });
 
-        const userData = res.data.data || res.data.user;
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to load profile");
+        }
+
+        const userData = data.data || data.user;
         setUser(userData);
       } catch (err) {
         console.error("Error fetching user profile:", err);

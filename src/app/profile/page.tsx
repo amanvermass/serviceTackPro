@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Mail, Phone, Lock, Edit2, Upload } from "lucide-react";
-import axios from "axios";
 import toast from "react-hot-toast";
 
 export default function ProfilePage() {
@@ -37,11 +36,16 @@ export default function ProfilePage() {
         const token = localStorage.getItem("token");
         if (!token) return;
 
-        const res = await axios.get(`${API_BASE}/api/users/me`, {
+        const res = await fetch(`${API_BASE}/api/users/me`, {
           headers: { "x-auth-token": token },
         });
 
-        const userData = res.data.data || res.data.user;
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to load profile");
+        }
+
+        const userData = data.data || data.user;
         setUser(userData);
         setEditForm({
           name: userData.name,
@@ -50,7 +54,7 @@ export default function ProfilePage() {
         });
         setPreview(null);
       } catch (err: any) {
-        toast.error(err.response?.data?.message || "Failed to load profile");
+        toast.error(err.message || "Failed to load profile");
       } finally {
         setProfileLoading(false);
       }
@@ -94,16 +98,23 @@ export default function ProfilePage() {
         formData.append("avatar", editForm.avatar);
       }
 
-      const res = await axios.put(`${API_BASE}/api/users/me`, formData, {
+      const res = await fetch(`${API_BASE}/api/users/me`, {
+        method: "PUT",
         headers: {
           "x-auth-token": token,
-          "Content-Type": "multipart/form-data",
+          // Note: When using FormData, fetch automatically sets the correct Content-Type with boundary
         },
+        body: formData,
       });
 
-      toast.success(res.data.message || "Profile updated");
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Update failed");
+      }
 
-      const updatedUser = res.data.data || res.data.user;
+      toast.success(data.message || "Profile updated");
+
+      const updatedUser = data.data || data.user;
       setUser(updatedUser);
       setIsEditing(false);
       setPreview(null);
@@ -111,7 +122,7 @@ export default function ProfilePage() {
       // Trigger Header refresh
       window.dispatchEvent(new Event("profileUpdated"));
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Update failed");
+      toast.error(err.message || "Update failed");
     } finally {
       setLoading(false);
     }
@@ -177,14 +188,8 @@ export default function ProfilePage() {
       });
 
       setShowSecurity(false);
-    } catch (err: unknown) {
-      let message = "Failed to change password";
-
-      if (axios.isAxiosError(err)) {
-        message =
-          err.response?.data?.message || err.response?.data?.error || message;
-      }
-
+    } catch (err: any) {
+      const message = err.message || "Failed to change password";
       toast.error(message);
     } finally {
       setLoading(false);
